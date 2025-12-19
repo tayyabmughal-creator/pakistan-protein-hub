@@ -1,5 +1,6 @@
 import { ArrowRight, Zap } from "lucide-react";
 import { Button } from "./ui/button";
+import heroProtein from "@/assets/hero-protein.png";
 
 const Hero = () => {
   return (
@@ -55,20 +56,18 @@ const Hero = () => {
             </div>
           </div>
 
-          {/* Image Placeholder */}
+          {/* Hero Image */}
           <div className="relative hidden lg:block">
             <div className="relative z-10 animate-float">
-              <div className="w-full aspect-square bg-card-gradient rounded-3xl border border-border flex items-center justify-center overflow-hidden">
-                <div className="text-center p-8">
-                  <div className="w-48 h-48 mx-auto bg-primary/20 rounded-full flex items-center justify-center mb-4">
-                    <span className="font-heading text-6xl font-bold text-primary">💪</span>
-                  </div>
-                  <p className="font-heading text-2xl font-bold text-foreground">Premium Whey</p>
-                  <p className="text-muted-foreground">Starting from PKR 8,999</p>
-                </div>
+              <div className="w-full aspect-square rounded-3xl overflow-hidden border border-border shadow-card">
+                <img 
+                  src={heroProtein} 
+                  alt="Premium Protein Supplement" 
+                  className="w-full h-full object-cover"
+                />
               </div>
             </div>
-            <div className="absolute -top-4 -right-4 w-full h-full bg-primary/10 rounded-3xl -z-10" />
+            <div className="absolute -top-4 -right-4 w-full h-full bg-primary/20 rounded-3xl -z-10 blur-xl" />
           </div>
         </div>
       </div>

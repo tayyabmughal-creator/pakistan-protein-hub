@@ -1,4 +1,12 @@
 import ProductCard from "./ProductCard";
+import wheyGold from "@/assets/products/whey-gold.png";
+import massGainer from "@/assets/products/mass-gainer.png";
+import preworkout from "@/assets/products/preworkout.png";
+import bcaa from "@/assets/products/bcaa.png";
+import creatine from "@/assets/products/creatine.png";
+import nitrotech from "@/assets/products/nitrotech.png";
+import iso100 from "@/assets/products/iso100.png";
+import animalpak from "@/assets/products/animalpak.png";
 
 const products = [
   {
@@ -7,7 +15,7 @@ const products = [
     price: 18999,
     originalPrice: 22999,
     rating: 5,
-    image: "🥛",
+    image: wheyGold,
     badge: "Best Seller",
   },
   {
@@ -15,7 +23,7 @@ const products = [
     brand: "Optimum Nutrition",
     price: 14999,
     rating: 4,
-    image: "💪",
+    image: massGainer,
   },
   {
     name: "C4 Original Pre-Workout",
@@ -23,7 +31,7 @@ const products = [
     price: 6999,
     originalPrice: 8499,
     rating: 5,
-    image: "⚡",
+    image: preworkout,
     badge: "Hot Deal",
   },
   {
@@ -31,14 +39,14 @@ const products = [
     brand: "EVL Nutrition",
     price: 5499,
     rating: 4,
-    image: "🔥",
+    image: bcaa,
   },
   {
     name: "Creatine Monohydrate",
     brand: "MuscleTech",
     price: 3999,
     rating: 5,
-    image: "💊",
+    image: creatine,
   },
   {
     name: "Nitro-Tech Whey Gold",
@@ -46,7 +54,7 @@ const products = [
     price: 16999,
     originalPrice: 19999,
     rating: 5,
-    image: "🏆",
+    image: nitrotech,
     badge: "Premium",
   },
   {
@@ -54,14 +62,14 @@ const products = [
     brand: "Dymatize",
     price: 21999,
     rating: 5,
-    image: "⭐",
+    image: iso100,
   },
   {
     name: "Animal Pak Multivitamin",
     brand: "Universal Nutrition",
     price: 7999,
     rating: 4,
-    image: "🦁",
+    image: animalpak,
   },
 ];
 

@@ -29,9 +29,11 @@ const ProductCard = ({ name, brand, price, originalPrice, rating, image, badge }
             {badge}
           </div>
         )}
-        <div className="w-full h-full flex items-center justify-center text-6xl group-hover:scale-110 transition-transform duration-300">
-          {image}
-        </div>
+        <img 
+          src={image} 
+          alt={name}
+          className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300"
+        />
       </div>
 
       {/* Content */}
