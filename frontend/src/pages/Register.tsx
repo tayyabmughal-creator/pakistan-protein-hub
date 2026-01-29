@@ -18,7 +18,7 @@ const Register = () => {
         setLoading(true);
 
         try {
-            const response = await fetch("http://localhost:5000/auth/register", {
+            const response = await fetch("http://localhost:8000/api/users/register", {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json",
@@ -29,10 +29,8 @@ const Register = () => {
             const data = await response.json();
 
             if (response.ok) {
-                localStorage.setItem("token", data.token);
-                localStorage.setItem("user", JSON.stringify(data));
-                toast.success("Registration successful!");
-                navigate("/home");
+                toast.success("Registration successful! Please login.");
+                navigate("/");
             } else {
                 toast.error(data.message || "Registration failed");
             }

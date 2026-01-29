@@ -17,7 +17,7 @@ const Login = () => {
         setLoading(true);
 
         try {
-            const response = await fetch("http://localhost:5000/auth/login", {
+            const response = await fetch("http://localhost:8000/api/users/login", {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json",
@@ -28,7 +28,7 @@ const Login = () => {
             const data = await response.json();
 
             if (response.ok) {
-                localStorage.setItem("token", data.token);
+                localStorage.setItem("token", data.access);
                 localStorage.setItem("user", JSON.stringify(data));
                 toast.success("Login successful!");
                 navigate("/home");
