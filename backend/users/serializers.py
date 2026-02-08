@@ -19,12 +19,13 @@ User = get_user_model()
 class UserSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
-        fields = ('id', 'name', 'email', 'role')
+        fields = ('id', 'name', 'email', 'phone_number', 'role')
+        read_only_fields = ('email', 'role')
 
 class RegisterSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
-        fields = ('id', 'name', 'email', 'password', 'role')
+        fields = ('id', 'name', 'email', 'phone_number', 'password')
         extra_kwargs = {'password': {'write_only': True}}
 
     def create(self, validated_data):
@@ -33,6 +34,17 @@ class RegisterSerializer(serializers.ModelSerializer):
             email=validated_data['email'],
             name=validated_data['name'],
             password=validated_data['password'],
-            role=validated_data.get('role', 'user')
+            phone_number=validated_data.get('phone_number'),
         )
         return user
+
+from .models import Address
+
+class AddressSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Address
+        fields = ['id', 'full_name', 'phone_number', 'city', 'area', 'street', 'is_default']
+
+    def create(self, validated_data):
+        validated_data['user'] = self.context['request'].user
+        return super().create(validated_data)
