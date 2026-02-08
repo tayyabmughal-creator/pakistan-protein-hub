@@ -1,23 +1,28 @@
 import { ShoppingCart, Star } from "lucide-react";
 import { Button } from "./ui/button";
+import { getImageUrl } from "@/lib/api";
 
 interface ProductCardProps {
   name: string;
   brand: string;
   price: number;
-  originalPrice?: number;
-  rating: number;
-  image: string;
+  discount_price?: number | null;
+  final_price?: number;
+  rating?: number;
+  image: string | null;
   badge?: string;
 }
 
-const ProductCard = ({ name, brand, price, originalPrice, rating, image, badge }: ProductCardProps) => {
-  const formatPrice = (price: number) => {
+const ProductCard = ({ name, brand, price, discount_price, final_price, rating = 5, image, badge }: ProductCardProps) => {
+  const displayPrice = final_price || discount_price || price;
+  const originalPrice = (discount_price || final_price) ? price : undefined;
+
+  const formatPrice = (p: number) => {
     return new Intl.NumberFormat('en-PK', {
       style: 'currency',
       currency: 'PKR',
       minimumFractionDigits: 0,
-    }).format(price);
+    }).format(p);
   };
 
   return (
@@ -29,8 +34,8 @@ const ProductCard = ({ name, brand, price, originalPrice, rating, image, badge }
             {badge}
           </div>
         )}
-        <img 
-          src={image} 
+        <img
+          src={getImageUrl(image) || "/placeholder.png"}
           alt={name}
           className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300"
         />
@@ -40,7 +45,7 @@ const ProductCard = ({ name, brand, price, originalPrice, rating, image, badge }
       <div className="p-4">
         <p className="text-xs text-primary font-medium uppercase tracking-wider mb-1">{brand}</p>
         <h3 className="font-heading text-lg font-bold text-foreground mb-2 line-clamp-2">{name}</h3>
-        
+
         {/* Rating */}
         <div className="flex items-center gap-1 mb-3">
           {[...Array(5)].map((_, i) => (
@@ -55,8 +60,8 @@ const ProductCard = ({ name, brand, price, originalPrice, rating, image, badge }
         {/* Price */}
         <div className="flex items-center justify-between">
           <div>
-            <span className="font-heading text-xl font-bold text-foreground">{formatPrice(price)}</span>
-            {originalPrice && (
+            <span className="font-heading text-xl font-bold text-foreground">{formatPrice(displayPrice)}</span>
+            {originalPrice && originalPrice > displayPrice && (
               <span className="text-sm text-muted-foreground line-through ml-2">{formatPrice(originalPrice)}</span>
             )}
           </div>

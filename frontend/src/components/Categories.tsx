@@ -1,51 +1,27 @@
+import { useQuery } from "@tanstack/react-query";
 import { ArrowRight } from "lucide-react";
-import wheyCategory from "@/assets/categories/whey.png";
-import massCategory from "@/assets/categories/mass.png";
-import preworkoutCategory from "@/assets/categories/preworkout.png";
-import bcaaCategory from "@/assets/categories/bcaa.png";
-import creatineCategory from "@/assets/categories/creatine.png";
-import vitaminsCategory from "@/assets/categories/vitamins.png";
+import { fetchCategories, getImageUrl } from "@/lib/api";
+import { Skeleton } from "./ui/skeleton";
 
-const categories = [
-  {
-    name: "Whey Protein",
-    count: 45,
-    image: wheyCategory,
-    color: "from-primary/20 to-primary/5",
-  },
-  {
-    name: "Mass Gainers",
-    count: 28,
-    image: massCategory,
-    color: "from-orange-500/20 to-orange-500/5",
-  },
-  {
-    name: "Pre-Workout",
-    count: 32,
-    image: preworkoutCategory,
-    color: "from-yellow-500/20 to-yellow-500/5",
-  },
-  {
-    name: "BCAAs & Aminos",
-    count: 24,
-    image: bcaaCategory,
-    color: "from-red-500/20 to-red-500/5",
-  },
-  {
-    name: "Creatine",
-    count: 18,
-    image: creatineCategory,
-    color: "from-blue-500/20 to-blue-500/5",
-  },
-  {
-    name: "Vitamins",
-    count: 36,
-    image: vitaminsCategory,
-    color: "from-green-500/20 to-green-500/5",
-  },
+const CATEGORY_COLORS = [
+  "from-primary/20 to-primary/5",
+  "from-orange-500/20 to-orange-500/5",
+  "from-yellow-500/20 to-yellow-500/5",
+  "from-red-500/20 to-red-500/5",
+  "from-blue-500/20 to-blue-500/5",
+  "from-green-500/20 to-green-500/5",
 ];
 
 const Categories = () => {
+  const { data, isLoading, error } = useQuery({
+    queryKey: ["categories"],
+    queryFn: fetchCategories,
+  });
+
+  if (error) return null;
+
+  const categories = data || [];
+
   return (
     <section id="categories" className="py-20 bg-secondary/30">
       <div className="container mx-auto px-4">
@@ -59,34 +35,39 @@ const Categories = () => {
         </div>
 
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
-          {categories.map((category, index) => (
-            <a
-              key={index}
-              href="#"
-              className="group relative bg-card rounded-2xl border border-border p-4 text-center hover:border-primary/50 transition-all duration-300 overflow-hidden"
-            >
-              <div className={`absolute inset-0 bg-gradient-to-b ${category.color} opacity-0 group-hover:opacity-100 transition-opacity duration-300`} />
-              
-              <div className="relative z-10">
-                <div className="w-20 h-20 mx-auto mb-4 rounded-xl overflow-hidden group-hover:scale-110 transition-transform duration-300">
-                  <img 
-                    src={category.image} 
-                    alt={category.name}
-                    className="w-full h-full object-cover"
-                  />
+          {isLoading ? (
+            Array.from({ length: 6 }).map((_, i) => (
+              <Skeleton key={i} className="h-32 w-full rounded-2xl" />
+            ))
+          ) : (
+            categories.map((category: any, index: number) => (
+              <a
+                key={category.id}
+                href={`#?category=${category.slug}`}
+                className="group relative bg-card rounded-2xl border border-border p-4 text-center hover:border-primary/50 transition-all duration-300 overflow-hidden"
+              >
+                <div className={`absolute inset-0 bg-gradient-to-b ${CATEGORY_COLORS[index % CATEGORY_COLORS.length]} opacity-0 group-hover:opacity-100 transition-opacity duration-300`} />
+
+                <div className="relative z-10">
+                  <div className="w-20 h-20 mx-auto mb-4 rounded-xl overflow-hidden group-hover:scale-110 transition-transform duration-300">
+                    <img
+                      src={getImageUrl(category.image) || "/placeholder-cat.png"}
+                      alt={category.name}
+                      className="w-full h-full object-cover"
+                    />
+                  </div>
+                  <h3 className="font-heading font-bold text-foreground mb-1 text-sm">{category.name}</h3>
+
+                  <div className="mt-3 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+                    <span className="inline-flex items-center text-primary text-xs font-medium">
+                      Shop Now
+                      <ArrowRight className="w-3 h-3 ml-1" />
+                    </span>
+                  </div>
                 </div>
-                <h3 className="font-heading font-bold text-foreground mb-1 text-sm">{category.name}</h3>
-                <p className="text-xs text-muted-foreground">{category.count} Products</p>
-                
-                <div className="mt-3 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
-                  <span className="inline-flex items-center text-primary text-xs font-medium">
-                    Shop Now
-                    <ArrowRight className="w-3 h-3 ml-1" />
-                  </span>
-                </div>
-              </div>
-            </a>
-          ))}
+              </a>
+            ))
+          )}
         </div>
       </div>
     </section>

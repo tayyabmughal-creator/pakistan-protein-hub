@@ -41,7 +41,27 @@ For protected routes (e.g., Checkout, Profile), include the header:
 - **List**: `GET /api/products/`
   - Filters: `?category=protein`, `?search=whey`, `?ordering=price`
 
-## 5. Error Handling
+## 5. Admin APIs (Staff Only)
+These headers require a staff/admin user token.
+
+### Products Management
+- **List/Create**: `GET/POST /api/admin/products/`
+- **Update/Delete**: `PATCH/DELETE /api/admin/products/{id}/`
+
+### Categories Management
+- **List/Create**: `GET/POST /api/admin/categories/`
+- **Update/Delete**: `PATCH/DELETE /api/admin/categories/{id}/`
+
+### Order Management
+- **List All Orders**: `GET /api/admin/orders/`
+- **Update Status**: `PATCH /api/admin/orders/{id}/`
+  - Body: `{ "status": "SHIPPED", "payment_status": "PAID" }`
+
+### User Management
+- **List Users**: `GET /api/admin/users/`
+- **User Details**: `GET /api/admin/users/{id}/`
+
+## 6. Error Handling
 Errors follow a standard format:
 ```json
 {
@@ -51,6 +71,6 @@ Errors follow a standard format:
 }
 ```
 
-## 6. Local Development
+## 7. Local Development
 - Backend running on: `http://127.0.0.1:8000`
-- Frontend running on: `http://127.0.0.1:8080` (ensure `vite.config.ts` proxies correctly if needed or use absolute URLs)
+- Frontend running on: `http://127.0.0.1:8080`
