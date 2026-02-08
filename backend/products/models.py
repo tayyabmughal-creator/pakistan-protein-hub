@@ -34,5 +34,5 @@ class Product(models.Model):
         return self.discount_price if self.discount_price else self.price
 
     @property
-    def is_in_stock(self):
+    def is_in_stock(self) -> bool:
         return self.stock > 0

@@ -9,8 +9,8 @@ class ProductListView(generics.ListAPIView):
     serializer_class = ProductSerializer
     permission_classes = [AllowAny]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
-    filterset_fields = ['category', 'brand', 'is_in_stock'] # dependent on exact model fields, is_in_stock is a property so need custom filter or just rely on client side/custom filter class if needed. For now simple fields.
-    # Note: filtering by property 'is_in_stock' needs a custom filter, simplifying for now to just model fields.
+    filterset_fields = ['category', 'brand'] 
+    # Note: filtering by stock > 0 can be handled via custom filter class if needed.
     # We can filter by stock > 0 manually if needed or add a field.
     search_fields = ['name', 'description', 'brand']
     ordering_fields = ['price', 'created_at']

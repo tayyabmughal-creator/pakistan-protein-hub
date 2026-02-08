@@ -5,7 +5,7 @@ This document provides the necessary information for the frontend team to integr
 ## 1. API Documentation
 We use **Swagger/OpenAPI** for interactive documentation.
 - **Swagger UI**: [http://127.0.0.1:8000/api/docs/](http://127.0.0.1:8000/api/docs/)
-- **Schema (YAML)**: See `backend/api_schema.yaml` (generated in project root) or download from `http://127.0.0.1:8000/api/schema/`
+- **Schema (YAML)**: See `api_schema.yaml` in the root folder or download from `http://127.0.0.1:8000/api/schema/`
 
 **Recommendation**: Import the `api_schema.yaml` into **Postman** or **Insomnia** to auto-generate a collection for testing.
 
