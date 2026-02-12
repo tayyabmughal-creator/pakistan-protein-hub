@@ -19,6 +19,7 @@ The API uses **JWT (JSON Web Token)** authentication.
   - Body: `{ "email": "user@example.com", "password": "password" }`
   - Response: `{ "refresh": "...", "access": "..." }`
 - **Register Endpoint**: `POST /api/users/register/`
+- **Token Refresh**: `POST /api/users/token/refresh/`
 
 **Authorization Header**:
 For protected routes (e.g., Checkout, Profile), include the header:
@@ -26,38 +27,48 @@ For protected routes (e.g., Checkout, Profile), include the header:
 
 ## 4. Key Workflows
 
+### Products & Categories
+- **List All Products**: `GET /api/products/`
+  - Filters: `?category=slug`, `?brand=brand_name`, `?search=query`, `?ordering=price`
+- **Product Detail**: `GET /api/products/{slug}/`
+- **List All Categories**: `GET /api/categories/`
+
 ### Shopping Cart
 1. **Get Cart**: `GET /api/cart/`
 2. **Add Item**: `POST /api/cart/items/` (Body: `{ "product_id": 1, "quantity": 1 }`)
 3. **Update Item**: `PATCH /api/cart/items/{id}/`
 4. **Remove Item**: `DELETE /api/cart/items/{id}/`
+5. **Sync Cart**: `POST /api/cart/sync/` (Used to sync local storage items to server after login)
 
-### Checkout
-1. **Create Address**: `POST /api/users/addresses/`
+### Checkout & Orders
+1. **Manage Addresses**: 
+   - `GET/POST /api/users/addresses/`
+   - `GET/PATCH/DELETE /api/users/addresses/{id}/`
 2. **Place Order**: `POST /api/orders/`
    - Body: `{ "address_id": 1, "payment_method": "COD" }`
+3. **Order History**: `GET /api/orders/`
+4. **Order Detail**: `GET /api/orders/{id}/`
+5. **Cancel Order**: `POST /api/orders/{id}/cancel/` (Available for PENDING/CONFIRMED orders)
 
-### Products
-- **List**: `GET /api/products/`
-  - Filters: `?category=protein`, `?search=whey`, `?ordering=price`
+### Trust & Reviews
+- **Product Reviews**: `GET /api/reviews/`
+- **Submit Review**: `POST /api/reviews/`
+  - Body: `{ "product": 1, "rating": 5, "comment": "Great product!" }`
 
 ## 5. Admin APIs (Staff Only)
 These headers require a staff/admin user token.
 
-### Products Management
-- **List/Create**: `GET/POST /api/admin/products/`
-- **Update/Delete**: `PATCH/DELETE /api/admin/products/{id}/`
+### Inventory Management
+- **Products**: `GET/POST /api/admin/products/`
+- **Categories**: `GET/POST /api/admin/categories/`
+- **Update/Delete**: Use `PATCH/DELETE` on the specific `{id}/` paths for the above.
 
-### Categories Management
-- **List/Create**: `GET/POST /api/admin/categories/`
-- **Update/Delete**: `PATCH/DELETE /api/admin/categories/{id}/`
-
-### Order Management
+### Order Processing
 - **List All Orders**: `GET /api/admin/orders/`
 - **Update Status**: `PATCH /api/admin/orders/{id}/`
   - Body: `{ "status": "SHIPPED", "payment_status": "PAID" }`
 
-### User Management
+### User Oversight
 - **List Users**: `GET /api/admin/users/`
 - **User Details**: `GET /api/admin/users/{id}/`
 
