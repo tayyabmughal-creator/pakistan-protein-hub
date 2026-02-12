@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CORS Test</title>
+</head>
+<body>
+    <h1>CORS Tester</h1>
+    <button onclick="testLogin()">Test Login</button>
+    <div id="output"></div>
+
+    <script>
+        async function testLogin() {
+            const output = document.getElementById('output');
+            output.innerHTML = "Testing...";
+            
+            try {
+                const response = await fetch('http://127.0.0.1:8000/api/users/login', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        email: 'admin@example.com',
+                        password: 'admin123'
+                    })
+                });
+                
+                const data = await response.json();
+                output.innerHTML = `Status: ${response.status}<br>Response: ${JSON.stringify(data, null, 2)}`;
+            } catch (error) {
+                output.innerHTML = `Error: ${error.message}`;
+                console.error(error);
+            }
+        }
+    </script>
+</body>
+</html>

@@ -11,7 +11,7 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
         data['id'] = self.user.id
         data['name'] = self.user.name
         data['email'] = self.user.email
-        data['role'] = self.user.role
+        data['is_staff'] = self.user.is_staff
         return data
 
 User = get_user_model()
@@ -19,8 +19,8 @@ User = get_user_model()
 class UserSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
-        fields = ('id', 'name', 'email', 'phone_number', 'role')
-        read_only_fields = ('email', 'role')
+        fields = ('id', 'name', 'email', 'phone_number', 'is_staff')
+        read_only_fields = ('email', 'is_staff')
 
 class RegisterSerializer(serializers.ModelSerializer):
     class Meta:

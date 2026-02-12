@@ -4,6 +4,7 @@ from django.db import transaction
 class Category(models.Model):
     name = models.CharField(max_length=100)
     slug = models.SlugField(unique=True)
+    image = models.ImageField(upload_to='categories/', null=True, blank=True)
 
     class Meta:
         verbose_name_plural = "Categories"

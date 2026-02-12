@@ -17,6 +17,7 @@ class ProductListView(generics.ListAPIView):
 
     def get_queryset(self):
         queryset = super().get_queryset()
+        
         category_slug = self.request.query_params.get('category_slug')
         if category_slug:
             queryset = queryset.filter(category__slug=category_slug)

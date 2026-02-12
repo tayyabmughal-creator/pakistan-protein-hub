@@ -5,38 +5,50 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { toast } from "sonner";
+import { useAuth } from "@/context/AuthContext";
+import apiClient from "@/lib/apiClient";
 
 const Login = () => {
     const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
     const [loading, setLoading] = useState(false);
     const navigate = useNavigate();
+    const { login } = useAuth();
 
     const handleLogin = async (e: React.FormEvent) => {
         e.preventDefault();
         setLoading(true);
 
         try {
-            const response = await fetch("http://127.0.0.1:8000/api/users/login", {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json",
-                },
-                body: JSON.stringify({ email, password }),
-            });
+            const response = await apiClient.post("/users/login", { email, password });
+            const data = response.data;
 
-            const data = await response.json();
+            // Backend returns flat structure, so we construct the user object
+            console.log("Processing Login Response (v2)...", data);
 
-            if (response.ok) {
-                localStorage.setItem("token", data.access);
-                localStorage.setItem("user", JSON.stringify(data));
-                toast.success("Login successful!");
-                navigate("/home");
+            const user = {
+                id: data.id,
+                name: data.name,
+                email: data.email,
+                is_staff: data.is_staff
+            };
+
+            login(data.access, data.refresh, user);
+            toast.success("Login successful!");
+
+            if (user?.is_staff) {
+                navigate("/admin");
             } else {
-                toast.error(data.message || "Login failed");
+                navigate("/home");
             }
-        } catch (error) {
-            toast.error("Something went wrong. Please try again.");
+        } catch (error: any) {
+            console.error("Login Error Details:", error);
+            if (error.response) {
+                console.error("Response Data:", error.response.data);
+                console.error("Response Status:", error.response.status);
+            }
+            const msg = error.response?.data?.detail || "Login failed. Check console for details.";
+            toast.error(msg);
         } finally {
             setLoading(false);
         }

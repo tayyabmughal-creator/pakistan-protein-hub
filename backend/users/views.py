@@ -15,6 +15,27 @@ class CustomTokenObtainPairView(TokenObtainPairView):
     serializer_class = CustomTokenObtainPairSerializer
     throttle_classes = [AuthThrottle]
 
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework import status
+from rest_framework_simplejwt.tokens import RefreshToken
+
+class LogoutView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request):
+        try:
+            refresh_token = request.data.get("refresh")
+            token = RefreshToken(refresh_token)
+            token.blacklist()
+            return Response(status=status.HTTP_205_RESET_CONTENT)
+        except Exception:
+            # Even if invalid, we want the frontend to treat it as logged out
+            return Response(
+                {"detail": "Invalid or expired refresh token."}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
 User = get_user_model()
 
 class RegisterView(generics.CreateAPIView):

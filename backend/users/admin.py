@@ -8,12 +8,18 @@ class AddressInline(admin.TabularInline):
 
 @admin.register(User)
 class CustomUserAdmin(UserAdmin):
-    list_display = ('email', 'name', 'role', 'is_staff')
-    list_filter = ('role', 'is_staff')
-    fieldsets = UserAdmin.fieldsets + (
-        (None, {'fields': ('role', 'phone_number')}),
+    list_display = ('email', 'name', 'is_staff', 'is_superuser')
+    list_filter = ('is_staff', 'is_superuser', 'groups')
+    fieldsets = (
+        (None, {'fields': ('email', 'password')}),
+        ('Personal info', {'fields': ('name', 'phone_number')}),
+        ('Permissions', {'fields': ('is_active', 'is_staff', 'is_superuser', 'groups', 'user_permissions')}),
+        ('Important dates', {'fields': ('last_login', 'date_joined')}),
     )
-    add_fieldsets = UserAdmin.add_fieldsets + (
-        (None, {'fields': ('name', 'role', 'phone_number')}),
+    add_fieldsets = (
+        (None, {
+            'classes': ('wide',),
+            'fields': ('email', 'name', 'phone_number', 'password', 'is_staff', 'is_superuser')}
+        ),
     )
     inlines = [AddressInline]
