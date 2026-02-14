@@ -7,6 +7,11 @@ export const fetchProducts = async () => {
     return response.data;
 };
 
+export const fetchProductBySlug = async (slug: string) => {
+    const response = await apiClient.get(`/products/${slug}/`);
+    return response.data;
+};
+
 export const fetchCategories = async () => {
     const response = await apiClient.get("/categories/");
     return response.data;
@@ -24,6 +29,69 @@ export const getImageUrl = (path: string | null) => {
 
     const rootUrl = BASE_URL.replace("/api", "");
     return `${rootUrl}${cleanPath}`;
+};
+
+// --- Cart ---
+export const fetchCart = async () => {
+    const response = await apiClient.get("/cart/");
+    return response.data;
+};
+
+export const addToCart = async (productId: number, quantity: number) => {
+    const response = await apiClient.post("/cart/items/", { product_id: productId, quantity });
+    return response.data;
+};
+
+export const updateCartItem = async (itemId: number, quantity: number) => {
+    const response = await apiClient.put(`/cart/items/${itemId}/`, { quantity });
+    return response.data;
+};
+
+export const removeCartItem = async (itemId: number) => {
+    const response = await apiClient.delete(`/cart/items/${itemId}/`);
+    return response.data;
+};
+
+export const syncCart = async (items: { product_id: number; quantity: number }[]) => {
+    const response = await apiClient.post("/cart/sync/", { items });
+    return response.data;
+};
+
+// --- Users / Addresses ---
+export const fetchAddresses = async () => {
+    const response = await apiClient.get("/users/addresses");
+    return response.data;
+};
+
+export const createAddress = async (data: any) => {
+    const response = await apiClient.post("/users/addresses", data);
+    return response.data;
+};
+
+export const deleteAddress = async (id: number) => {
+    await apiClient.delete(`/users/addresses/${id}`);
+    return id;
+};
+
+// --- Orders ---
+export const createOrder = async (data: { address_id: number; payment_method: string }) => {
+    const response = await apiClient.post("/orders/", data);
+    return response.data;
+};
+
+export const fetchOrders = async () => {
+    const response = await apiClient.get("/orders/");
+    return response.data;
+};
+
+export const fetchOrderById = async (id: number) => {
+    const response = await apiClient.get(`/orders/${id}/`);
+    return response.data;
+};
+
+export const cancelOrder = async (id: number) => {
+    const response = await apiClient.post(`/orders/${id}/cancel/`);
+    return response.data;
 };
 
 // Admin APIs
