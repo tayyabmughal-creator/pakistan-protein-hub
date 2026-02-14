@@ -2,9 +2,16 @@ from rest_framework import serializers
 from .models import Order, OrderItem
 
 class OrderItemSerializer(serializers.ModelSerializer):
+    product_image = serializers.SerializerMethodField()
+
     class Meta:
         model = OrderItem
-        fields = ['id', 'product', 'product_name', 'quantity', 'price']
+        fields = ['id', 'product', 'product_name', 'quantity', 'price', 'product_image']
+
+    def get_product_image(self, obj):
+        if obj.product.image:
+            return obj.product.image.url
+        return None
 
 class OrderSerializer(serializers.ModelSerializer):
     items = OrderItemSerializer(many=True, read_only=True)

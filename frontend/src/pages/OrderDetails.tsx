@@ -205,6 +205,13 @@ const OrderDetails = () => {
                                 </p>
                             </div>
                         ) : null}
+                        <div className="mt-4 pt-4 border-t border-border">
+                            <Link to="/">
+                                <Button className="w-full font-bold bg-green-600 hover:bg-green-700 text-white">
+                                    Shop More
+                                </Button>
+                            </Link>
+                        </div>
                     </div>
                 </div>
             </div>

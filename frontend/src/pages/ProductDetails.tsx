@@ -14,6 +14,8 @@ interface Product {
     slug: string;
     description: string;
     price: string;
+    discount_price?: string | null;
+    final_price?: string;
     stock: number;
     image: string | null;
     category: number;
@@ -99,11 +101,16 @@ const ProductDetails = () => {
 
     if (!product) return null;
 
-    const formattedPrice = new Intl.NumberFormat('en-PK', {
-        style: 'currency',
-        currency: 'PKR',
-        minimumFractionDigits: 0,
-    }).format(parseFloat(product.price));
+    const formatPrice = (p: string | number) => {
+        return new Intl.NumberFormat('en-PK', {
+            style: 'currency',
+            currency: 'PKR',
+            minimumFractionDigits: 0,
+        }).format(Number(p));
+    };
+
+    const hasDiscount = product.discount_price || (product.final_price && Number(product.final_price) < Number(product.price));
+    const displayPrice = product.final_price || product.discount_price || product.price;
 
     return (
         <div className="min-h-screen bg-[#050505] py-12">
@@ -117,6 +124,11 @@ const ProductDetails = () => {
                                 alt={product.name}
                                 className="w-full h-full object-contain p-8 group-hover:scale-105 transition-transform duration-500"
                             />
+                            {hasDiscount && (
+                                <div className="absolute top-4 left-4 bg-white text-black font-bold px-3 py-1 rounded text-sm uppercase tracking-wider">
+                                    Sale
+                                </div>
+                            )}
                         </div>
                         {/* Thumbnails */}
                         <div className="flex gap-4 overflow-x-auto pb-2 scrollbar-none">
@@ -171,8 +183,13 @@ const ProductDetails = () => {
                         <div className="h-px bg-white/10" />
 
                         <div>
+                            {hasDiscount && (
+                                <span className="text-xl text-gray-500 line-through block mb-1 font-medium">
+                                    {formatPrice(product.price)}
+                                </span>
+                            )}
                             <span className="text-4xl md:text-5xl font-heading font-bold text-primary block tracking-wide">
-                                {formattedPrice}
+                                {formatPrice(displayPrice)}
                             </span>
                             <p className="text-gray-400 mt-6 leading-relaxed text-lg font-light">
                                 {product.description}
