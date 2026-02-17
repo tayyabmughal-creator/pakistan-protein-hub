@@ -93,6 +93,15 @@ const Login = () => {
                                 className="bg-black/20 border-white/10 focus:border-primary text-white h-12"
                             />
                         </div>
+
+                        <div className="flex justify-end">
+                            <Link
+                                to="/forgot-password"
+                                className="text-sm font-medium text-primary hover:text-primary/80 transition-colors"
+                            >
+                                Forgot password?
+                            </Link>
+                        </div>
                         <Button
                             type="submit"
                             className="w-full h-12 font-bold text-lg bg-primary text-black hover:bg-white transition-all shadow-glow"
@@ -118,7 +127,7 @@ const Login = () => {
                     </p>
                 </CardFooter>
             </Card>
-        </div>
+        </div >
     );
 };
 

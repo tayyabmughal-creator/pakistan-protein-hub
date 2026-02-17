@@ -6,6 +6,8 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import Index from "./pages/Index";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
+import ForgotPassword from "./pages/ForgotPassword";
+import ResetPassword from "./pages/ResetPassword";
 import Dashboard from "./pages/admin/Dashboard";
 import AdminProducts from "./pages/admin/Products";
 import ProductForm from "./pages/admin/ProductForm";
@@ -69,6 +71,8 @@ const App = () => (
               <Route path="/returns" element={<Returns />} />
               <Route path="/login" element={<AuthRedirect><Login /></AuthRedirect>} />
               <Route path="/register" element={<AuthRedirect><Register /></AuthRedirect>} />
+              <Route path="/forgot-password" element={<AuthRedirect><ForgotPassword /></AuthRedirect>} />
+              <Route path="/reset-password/:uid/:token" element={<AuthRedirect><ResetPassword /></AuthRedirect>} />
 
               {/* Protected Routes */}
               <Route path="/products/:slug" element={

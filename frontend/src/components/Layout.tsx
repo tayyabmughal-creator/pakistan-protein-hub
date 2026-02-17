@@ -9,7 +9,7 @@ interface LayoutProps {
 
 const Layout = ({ children }: LayoutProps) => {
   const location = useLocation();
-  const isAuthPage = location.pathname === "/login" || location.pathname === "/register";
+  const isAuthPage = location.pathname === "/login" || location.pathname === "/register" || location.pathname === "/forgot-password" || location.pathname.startsWith("/reset-password");
   const isAdminPage = location.pathname.startsWith("/admin");
 
   // Show Navbar/Footer only if NOT auth page AND NOT admin page
