@@ -1,4 +1,4 @@
-name: Deploy to VPS
+name: Deploy Full Project
 
 on:
   push:
@@ -11,15 +11,49 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
-      - name: Deploy code to server
-        uses: appleboy/ssh-action@v1.0.0
+      - name: Deploy to VPS
+        uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.SSH_HOST }}
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.VPS_SSH_KEY }}
           port: ${{ secrets.VPS_PORT }}
           script: |
+            set -e
+
+            echo "Going to project folder"
             cd ${{ secrets.PROJECT_PATH }}
+
+            echo "Pulling latest code"
             git pull origin main
+
+            echo "Installing backend requirements"
+            cd backend
+            if [ -d "venv" ]; then
+              source venv/bin/activate
+            elif [ -d ".venv" ]; then
+              source .venv/bin/activate
+            fi
+
+            pip install -r requirements.txt
+
+            echo "Running Django migrations"
+            python manage.py migrate
+
+            echo "Collecting static files"
+            python manage.py collectstatic --noinput
+
+            echo "Building frontend"
+            cd ../frontend
+            npm install
+            npm run build
+
+            echo "Restarting backend"
+            pm2 restart backend || pm2 start ../backend/manage.py --name backend --interpreter python3 -- runserver 0.0.0.0:8000
+
+            echo "Reloading nginx"
+            sudo systemctl reload nginx
+
+            echo "Deployment completed successfully"
