@@ -60,7 +60,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         if (refresh) {
             try {
                 // Call backend logout to blacklist token - Fire and forget
-                await apiClient.post("/users/logout", { refresh });
+                await apiClient.post("/users/logout/", { refresh });
             } catch (error) {
                 console.error("Logout failed:", error);
             }

@@ -1,4 +1,4 @@
-import { ShoppingCart, Star, Loader2 } from "lucide-react";
+import { ShoppingCart, Loader2 } from "lucide-react";
 import { Button } from "./ui/button";
 import { getImageUrl } from "@/lib/api";
 import { useState } from "react";
@@ -10,14 +10,14 @@ interface ProductCardProps {
   price: number;
   discount_price?: number | null;
   final_price?: number;
-  rating?: number;
   image: string | null;
   badge?: string;
   slug: string;
+  stock?: number;
   onAddToCart?: (id: number) => Promise<void>;
 }
 
-const ProductCard = ({ id, name, brand, price, discount_price, final_price, rating = 5, image, badge, slug, onAddToCart }: ProductCardProps) => {
+const ProductCard = ({ id, name, brand, price, discount_price, final_price, image, badge, slug, stock = 0, onAddToCart }: ProductCardProps) => {
   const [loading, setLoading] = useState(false);
   const displayPrice = final_price || discount_price || price;
   const originalPrice = (discount_price || final_price) ? price : undefined;
@@ -74,16 +74,13 @@ const ProductCard = ({ id, name, brand, price, discount_price, final_price, rati
             {name}
           </h3>
 
-          {/* Rating */}
-          <div className="flex items-center gap-1 mb-4">
-            {[...Array(5)].map((_, i) => (
-              <Star
-                key={i}
-                className={`w-3.5 h-3.5 ${i < rating ? 'text-primary fill-primary' : 'text-gray-700 fill-gray-700'}`}
-              />
-            ))}
-            <span className="text-xs text-gray-500 ml-2">({rating})</span>
-          </div>
+          <p className="mb-4 text-xs font-medium uppercase tracking-wider text-gray-500">
+            Authentic supplement
+          </p>
+
+          <p className={`mb-4 text-xs font-bold uppercase tracking-wider ${stock > 5 ? "text-green-500" : stock > 0 ? "text-amber-400" : "text-red-500"}`}>
+            {stock > 0 ? `${stock} in stock` : "Out of stock"}
+          </p>
 
           <div className="mt-auto flex items-center justify-between">
             <div className="flex flex-col">
@@ -96,7 +93,7 @@ const ProductCard = ({ id, name, brand, price, discount_price, final_price, rati
             <button
               className="w-10 h-10 rounded-full bg-primary flex items-center justify-center text-black hover:bg-white hover:scale-110 transition-all shadow-[0_0_15px_rgba(34,197,94,0.4)] disabled:opacity-50 disabled:cursor-not-allowed"
               onClick={handleAddToCart}
-              disabled={loading}
+              disabled={loading || stock === 0}
             >
               {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : <ShoppingCart className="w-5 h-5 font-bold" />}
             </button>

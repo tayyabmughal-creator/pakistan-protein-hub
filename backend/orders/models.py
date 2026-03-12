@@ -19,7 +19,10 @@ class Order(models.Model):
         ('FAILED', 'Failed'),
     )
 
-    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='orders')
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='orders', null=True, blank=True)
+    guest_name = models.CharField(max_length=255, blank=True)
+    guest_email = models.EmailField(blank=True)
+    guest_phone_number = models.CharField(max_length=20, blank=True)
     total_amount = models.DecimalField(max_digits=12, decimal_places=2)
     shipping_address = models.TextField() # Snapshot of address
     payment_method = models.CharField(max_length=10, choices=PAYMENT_METHOD_CHOICES, default='COD')
@@ -29,7 +32,8 @@ class Order(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     def __str__(self):
-        return f"Order #{self.id} - {self.user.email}"
+        customer = self.user.email if self.user_id else self.guest_email or self.guest_name or "guest"
+        return f"Order #{self.id} - {customer}"
 
 class OrderItem(models.Model):
     order = models.ForeignKey(Order, related_name='items', on_delete=models.CASCADE)

@@ -12,11 +12,11 @@ const Footer = () => {
                 <span className="font-heading font-bold text-primary-foreground text-xl">P</span>
               </div>
               <span className="font-heading text-2xl font-bold text-white tracking-wide">
-                POWER<span className="text-primary">FUEL</span>
+                Pak<span className="text-primary">Nutrition</span>
               </span>
             </div>
             <p className="text-gray-400 mb-6">
-              Pakistan's premium supplement store. Authentic products, best prices, and fastest delivery guaranteed.
+              PakNutrition is Pakistan's premium supplement store. Authentic products, honest pricing, and fast delivery.
             </p>
             <div className="flex gap-4">
               <a href="#" className="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center text-gray-400 hover:bg-primary hover:text-black transition-all">
@@ -45,6 +45,9 @@ const Footer = () => {
                 <a href="/deals" className="text-gray-400 hover:text-primary transition-colors">Deals & Offers</a>
               </li>
               <li>
+                <a href="/guest-orders" className="text-gray-400 hover:text-primary transition-colors">Track Guest Order</a>
+              </li>
+              <li>
                 <a href="/about" className="text-gray-400 hover:text-primary transition-colors">About Us</a>
               </li>
             </ul>
@@ -66,6 +69,9 @@ const Footer = () => {
               <li>
                 <a href="/returns" className="text-gray-400 hover:text-primary transition-colors">Returns & Refunds</a>
               </li>
+              <li>
+                <a href="/guest-orders" className="text-gray-400 hover:text-primary transition-colors">Guest Order Lookup</a>
+              </li>
             </ul>
           </div>
 
@@ -83,14 +89,14 @@ const Footer = () => {
               </li>
               <li className="flex items-center gap-3 text-gray-400">
                 <Mail className="w-5 h-5 text-primary shrink-0" />
-                <span>proteinfuel.com@gmail.com</span>
+                <span>support@paknutrition.pk</span>
               </li>
             </ul>
           </div>
         </div>
 
         <div className="border-t border-white/10 pt-8 flex flex-col md:flex-row justify-between items-center gap-4">
-          <p className="text-gray-500 text-sm">© {new Date().getFullYear()} PowerFuel. All rights reserved.</p>
+          <p className="text-gray-500 text-sm">© {new Date().getFullYear()} PakNutrition. All rights reserved.</p>
           <div className="flex gap-4 opacity-50">
             {/* Payment Icons Placeholder */}
             <div className="h-6 w-10 bg-white/10 rounded"></div>

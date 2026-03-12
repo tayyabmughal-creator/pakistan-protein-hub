@@ -2,12 +2,16 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Check, Plus, MapPin, Truck, CreditCard } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { fetchCart, fetchAddresses, createOrder } from "@/lib/api";
+import { fetchCart, fetchAddresses, createOrder, createGuestOrder } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 import { toast } from "sonner";
 import Loader from "@/components/Loader";
 import PageHeader from "@/components/PageHeader";
 import AddressForm from "@/components/AddressForm";
+import { clearGuestCart, getGuestCartItems } from "@/lib/guestCart";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 
 interface Address {
     id: number;
@@ -19,6 +23,17 @@ interface Address {
     is_default: boolean;
 }
 
+type GuestFormValues = {
+    guest_name: string;
+    guest_email: string;
+    guest_phone_number: string;
+    city: string;
+    area: string;
+    street: string;
+};
+
+type GuestFormErrors = Partial<Record<keyof GuestFormValues, string>>;
+
 const Checkout = () => {
     const { user } = useAuth();
     const navigate = useNavigate();
@@ -28,14 +43,73 @@ const Checkout = () => {
     const [selectedAddressId, setSelectedAddressId] = useState<number | null>(null);
     const [showAddressForm, setShowAddressForm] = useState(false);
     const [placingOrder, setPlacingOrder] = useState(false);
+    const [guestForm, setGuestForm] = useState<GuestFormValues>({
+        guest_name: "",
+        guest_email: "",
+        guest_phone_number: "",
+        city: "",
+        area: "",
+        street: "",
+    });
+    const [guestErrors, setGuestErrors] = useState<GuestFormErrors>({});
+
+    const setGuestField = (field: keyof GuestFormValues, value: string) => {
+        setGuestForm((prev) => ({ ...prev, [field]: value }));
+        setGuestErrors((prev) => {
+            if (!prev[field]) return prev;
+            const nextErrors = { ...prev };
+            delete nextErrors[field];
+            return nextErrors;
+        });
+    };
+
+    const validateGuestForm = () => {
+        const errors: GuestFormErrors = {};
+
+        if (!guestForm.guest_name.trim()) {
+            errors.guest_name = "Full name is required.";
+        }
+
+        if (!guestForm.guest_email.trim()) {
+            errors.guest_email = "Email is required.";
+        } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(guestForm.guest_email.trim())) {
+            errors.guest_email = "Enter a valid email address.";
+        }
+
+        const normalizedPhone = guestForm.guest_phone_number.replace(/[^\d+]/g, "");
+        if (!guestForm.guest_phone_number.trim()) {
+            errors.guest_phone_number = "Phone number is required.";
+        } else if (normalizedPhone.length < 10) {
+            errors.guest_phone_number = "Enter a valid phone number.";
+        }
+
+        if (!guestForm.city.trim()) {
+            errors.city = "City is required.";
+        }
+
+        if (!guestForm.area.trim()) {
+            errors.area = "Area is required.";
+        }
+
+        if (!guestForm.street.trim()) {
+            errors.street = "Street address is required.";
+        }
+
+        setGuestErrors(errors);
+        return Object.keys(errors).length === 0;
+    };
 
     const loadData = async () => {
         try {
             setLoading(true);
-            const [cartData, addressData] = await Promise.all([
-                fetchCart(),
-                fetchAddresses()
-            ]);
+            const cartData = user
+                ? await fetchCart()
+                : {
+                    items: getGuestCartItems().map((item) => ({
+                        product: item.product,
+                        quantity: item.quantity,
+                    })),
+                };
 
             if (!cartData.items || cartData.items.length === 0) {
                 toast.error("Your cart is empty");
@@ -49,14 +123,18 @@ const Checkout = () => {
             }, 0);
             setCartTotal(subtotal);
 
-            setAddresses(addressData);
+            if (user) {
+                const addressData = await fetchAddresses();
+                setAddresses(addressData);
 
-            // Auto-select default or first address
-            const defaultAddr = addressData.find((a: Address) => a.is_default);
-            if (defaultAddr) {
-                setSelectedAddressId(defaultAddr.id);
-            } else if (addressData.length > 0) {
-                setSelectedAddressId(addressData[0].id);
+                const defaultAddr = addressData.find((a: Address) => a.is_default);
+                if (defaultAddr) {
+                    setSelectedAddressId(defaultAddr.id);
+                } else if (addressData.length > 0) {
+                    setSelectedAddressId(addressData[0].id);
+                }
+            } else {
+                setAddresses([]);
             }
 
         } catch (error) {
@@ -67,25 +145,45 @@ const Checkout = () => {
     };
 
     useEffect(() => {
-        if (user) {
-            loadData();
-        }
+        loadData();
     }, [user]);
 
     const handlePlaceOrder = async () => {
-        if (!selectedAddressId) {
-            toast.error("Please select a delivery address");
-            return;
-        }
-
         try {
             setPlacingOrder(true);
-            const order = await createOrder({
-                address_id: selectedAddressId,
-                payment_method: "COD"
-            });
+            let order;
+            if (user) {
+                if (!selectedAddressId) {
+                    toast.error("Please select a delivery address");
+                    return;
+                }
+                order = await createOrder({
+                    address_id: selectedAddressId,
+                    payment_method: "COD"
+                });
+                navigate(`/orders/${order.id}`);
+            } else {
+                const guestItems = getGuestCartItems();
+                if (guestItems.length === 0) {
+                    toast.error("Your cart is empty");
+                    return;
+                }
+                if (!validateGuestForm()) {
+                    toast.error("Please correct the highlighted delivery details");
+                    return;
+                }
+                order = await createGuestOrder({
+                    ...guestForm,
+                    payment_method: "COD",
+                    items: guestItems.map((item) => ({
+                        product_id: item.product.id,
+                        quantity: item.quantity,
+                    })),
+                });
+                clearGuestCart();
+                navigate("/guest-order-confirmation", { state: { order } });
+            }
             toast.success("Order placed successfully!");
-            navigate(`/orders/${order.id}`);
         } catch (error: any) {
             console.error("Order placement error:", error);
             const errorMessage = error.response?.data?.error || error.response?.data?.detail || "Failed to place order. Please try again.";
@@ -125,7 +223,7 @@ const Checkout = () => {
                             <MapPin className="text-primary" /> Delivery Address
                         </h3>
 
-                        {!showAddressForm ? (
+                        {user && !showAddressForm ? (
                             <div className="space-y-4">
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                     {addresses.map((addr) => (
@@ -157,7 +255,44 @@ const Checkout = () => {
                                 </div>
                             </div>
                         ) : (
-                            <AddressForm onSuccess={handleAddressAdded} onCancel={() => setShowAddressForm(false)} />
+                            user ? (
+                                <AddressForm onSuccess={handleAddressAdded} onCancel={() => setShowAddressForm(false)} />
+                            ) : (
+                                <div className="space-y-4">
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                        <div className="space-y-2">
+                                            <Label htmlFor="guest_name">Full Name</Label>
+                                            <Input id="guest_name" value={guestForm.guest_name} onChange={(e) => setGuestField("guest_name", e.target.value)} aria-invalid={Boolean(guestErrors.guest_name)} />
+                                            {guestErrors.guest_name && <p className="text-sm text-destructive">{guestErrors.guest_name}</p>}
+                                        </div>
+                                        <div className="space-y-2">
+                                            <Label htmlFor="guest_email">Email</Label>
+                                            <Input id="guest_email" type="email" value={guestForm.guest_email} onChange={(e) => setGuestField("guest_email", e.target.value)} aria-invalid={Boolean(guestErrors.guest_email)} />
+                                            {guestErrors.guest_email && <p className="text-sm text-destructive">{guestErrors.guest_email}</p>}
+                                        </div>
+                                        <div className="space-y-2">
+                                            <Label htmlFor="guest_phone_number">Phone Number</Label>
+                                            <Input id="guest_phone_number" value={guestForm.guest_phone_number} onChange={(e) => setGuestField("guest_phone_number", e.target.value)} aria-invalid={Boolean(guestErrors.guest_phone_number)} />
+                                            {guestErrors.guest_phone_number && <p className="text-sm text-destructive">{guestErrors.guest_phone_number}</p>}
+                                        </div>
+                                        <div className="space-y-2">
+                                            <Label htmlFor="city">City</Label>
+                                            <Input id="city" value={guestForm.city} onChange={(e) => setGuestField("city", e.target.value)} aria-invalid={Boolean(guestErrors.city)} />
+                                            {guestErrors.city && <p className="text-sm text-destructive">{guestErrors.city}</p>}
+                                        </div>
+                                        <div className="space-y-2">
+                                            <Label htmlFor="area">Area</Label>
+                                            <Input id="area" value={guestForm.area} onChange={(e) => setGuestField("area", e.target.value)} aria-invalid={Boolean(guestErrors.area)} />
+                                            {guestErrors.area && <p className="text-sm text-destructive">{guestErrors.area}</p>}
+                                        </div>
+                                    </div>
+                                    <div className="space-y-2">
+                                        <Label htmlFor="street">Street Address</Label>
+                                        <Textarea id="street" value={guestForm.street} onChange={(e) => setGuestField("street", e.target.value)} aria-invalid={Boolean(guestErrors.street)} />
+                                        {guestErrors.street && <p className="text-sm text-destructive">{guestErrors.street}</p>}
+                                    </div>
+                                </div>
+                            )
                         )}
                     </div>
 

@@ -21,7 +21,7 @@ const Login = () => {
         setLoading(true);
 
         try {
-            const response = await apiClient.post("/users/login", { email, password });
+            const response = await apiClient.post("/users/login/", { email, password });
             const data = response.data;
 
             const user = {

@@ -1,10 +1,10 @@
 import AdminLayout from "@/components/admin/AdminLayout";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useEffect, useState } from "react";
-import { fetchAdminCategories, createCategory, updateCategory, deleteCategory } from "@/lib/api";
+import { fetchAdminCategories, createCategory, updateCategory, deleteCategory, getImageUrl } from "@/lib/api";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
-import { Plus, Pencil, Trash2, X } from "lucide-react";
+import { Plus, Pencil, Trash2 } from "lucide-react";
 import {
     Dialog,
     DialogContent,
@@ -103,14 +103,6 @@ const AdminCategories = () => {
         setFormData({ ...formData, name, slug });
     };
 
-    const getImageUrl = (path: string | null) => {
-        if (!path) return null;
-        if (path.startsWith("http")) return path;
-        // Fix relative paths
-        const cleanPath = path.startsWith("/") ? path : `/${path}`;
-        return `http://127.0.0.1:8000${cleanPath}`;
-    };
-
     return (
         <AdminLayout title="Categories">
             <div className="flex justify-end mb-6">
@@ -143,7 +135,7 @@ const AdminCategories = () => {
                                         <div className="w-10 h-10 rounded-md overflow-hidden bg-secondary/50 border border-border flex items-center justify-center">
                                             {cat.image ? (
                                                 <img
-                                                    src={getImageUrl(cat.image)!}
+                                                    src={getImageUrl(cat.image) || undefined}
                                                     alt={cat.name}
                                                     className="w-full h-full object-cover"
                                                 />

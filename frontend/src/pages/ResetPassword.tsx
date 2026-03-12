@@ -3,13 +3,13 @@ import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useParams, useNavigate } from 'react-router-dom';
-import axios from 'axios';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { toast } from 'sonner';
 import { Zap, Loader2 } from 'lucide-react';
+import apiClient from '@/lib/apiClient';
 
 const formSchema = z.object({
     new_password: z.string().min(8, 'Password must be at least 8 characters'),
@@ -35,7 +35,7 @@ const ResetPassword = () => {
     const onSubmit = async (values: z.infer<typeof formSchema>) => {
         setIsLoading(true);
         try {
-            await axios.post('http://localhost:8000/api/users/password-reset-confirm', {
+            await apiClient.post('/users/password-reset-confirm/', {
                 uid,
                 token,
                 new_password: values.new_password,

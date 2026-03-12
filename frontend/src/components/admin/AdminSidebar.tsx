@@ -1,4 +1,4 @@
-import { LayoutDashboard, Package, ListTree, ShoppingCart, Users, LogOut, ChevronRight } from "lucide-react";
+import { LayoutDashboard, Package, ListTree, ShoppingCart, Users, BarChart3, FileDown, Settings2, LogOut, ChevronRight } from "lucide-react";
 import { Link, useLocation } from "react-router-dom";
 import { cn } from "@/lib/utils";
 
@@ -7,10 +7,13 @@ const AdminSidebar = () => {
 
     const menuItems = [
         { title: "Dashboard", icon: LayoutDashboard, path: "/admin" },
+        { title: "Analytics", icon: BarChart3, path: "/admin/analytics" },
+        { title: "Customers", icon: Users, path: "/admin/customers" },
         { title: "Products", icon: Package, path: "/admin/products" },
         { title: "Categories", icon: ListTree, path: "/admin/categories" },
         { title: "Orders", icon: ShoppingCart, path: "/admin/orders" },
-        { title: "Users", icon: Users, path: "/admin/users" },
+        { title: "Homepage", icon: Settings2, path: "/admin/homepage" },
+        { title: "Reports", icon: FileDown, path: "/admin/reports" },
     ];
 
     return (
@@ -22,7 +25,7 @@ const AdminSidebar = () => {
 
             <nav className="flex-1 space-y-2">
                 {menuItems.map((item) => {
-                    const isActive = location.pathname === item.path;
+                    const isActive = location.pathname === item.path || (item.path !== "/admin" && location.pathname.startsWith(item.path));
                     return (
                         <Link
                             key={item.path}

@@ -3,13 +3,13 @@ import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Link } from 'react-router-dom';
-import axios from 'axios';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { toast } from 'sonner';
 import { Zap, Loader2 } from 'lucide-react';
+import apiClient from '@/lib/apiClient';
 
 const formSchema = z.object({
     email: z.string().email('Please enter a valid email address'),
@@ -29,7 +29,7 @@ const ForgotPassword = () => {
     const onSubmit = async (values: z.infer<typeof formSchema>) => {
         setIsLoading(true);
         try {
-            await axios.post('http://localhost:8000/api/users/password-reset', values);
+            await apiClient.post('/users/password-reset/', values);
             setIsSubmitted(true);
             toast.success('Reset link sent!');
         } catch (error: any) {

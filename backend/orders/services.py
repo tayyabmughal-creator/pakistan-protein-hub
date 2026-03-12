@@ -6,6 +6,7 @@ from products.models import Product
 from products.services import StockService
 from cart.models import Cart
 from users.models import Address
+from .notifications import send_order_notifications
 
 class OrderService:
     @staticmethod
@@ -68,5 +69,44 @@ class OrderService:
             # 6. Clear Cart
             cart.items.all().delete() 
             # or cart.delete() ? Requirement "Clear cart". Usually empty items.
-            
+            send_order_notifications(order)
+            return order
+
+    @staticmethod
+    def create_guest_order(*, guest_name, guest_email, guest_phone_number, city, area, street, items, payment_method='COD'):
+        with transaction.atomic():
+            if not items:
+                raise ValidationError("Cart is empty")
+
+            shipping_address = f"{guest_name}, {guest_phone_number}, {street}, {area}, {city}"
+            order = Order.objects.create(
+                user=None,
+                guest_name=guest_name,
+                guest_email=guest_email,
+                guest_phone_number=guest_phone_number,
+                total_amount=0,
+                shipping_address=shipping_address,
+                payment_method=payment_method,
+            )
+
+            final_total = 0
+            for item in items:
+                product = item['product']
+                quantity = item['quantity']
+
+                StockService.deduct_stock(product.id, quantity)
+                price = product.final_price
+
+                OrderItem.objects.create(
+                    order=order,
+                    product=product,
+                    product_name=product.name,
+                    quantity=quantity,
+                    price=price
+                )
+                final_total += price * quantity
+
+            order.total_amount = final_total
+            order.save()
+            send_order_notifications(order)
             return order

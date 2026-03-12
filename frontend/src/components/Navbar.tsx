@@ -1,4 +1,4 @@
-import { ShoppingCart, Menu, Search, User, LayoutDashboard, LogOut, X, Loader2 } from "lucide-react";
+import { ShoppingCart, Menu, Search, User, LogOut, X, Loader2 } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -11,8 +11,9 @@ import { Button } from "./ui/button";
 import { useState, useEffect, useRef } from "react";
 import { useAuth } from "@/context/AuthContext";
 import { Link, useNavigate } from "react-router-dom";
-import { fetchProducts, getImageUrl } from "@/lib/api";
+import { fetchCart, fetchProducts, getImageUrl } from "@/lib/api";
 import { useQuery } from "@tanstack/react-query";
+import { getGuestCartCount, subscribeToGuestCartUpdates } from "@/lib/guestCart";
 
 // Hook for debouncing
 function useDebounce<T>(value: T, delay: number): T {
@@ -36,6 +37,7 @@ const Navbar = () => {
   // Search State
   const [searchQuery, setSearchQuery] = useState("");
   const [showResults, setShowResults] = useState(false);
+  const [guestCartCount, setGuestCartCount] = useState(0);
   const debouncedSearch = useDebounce(searchQuery, 300);
   const searchRef = useRef<HTMLDivElement>(null);
 
@@ -52,6 +54,13 @@ const Navbar = () => {
     };
   }, []);
 
+  useEffect(() => {
+    if (user) return;
+    const syncGuestCartCount = () => setGuestCartCount(getGuestCartCount());
+    syncGuestCartCount();
+    return subscribeToGuestCartUpdates(syncGuestCartCount);
+  }, [user]);
+
   // Fetch search results
   const { data: searchResults, isLoading: isSearching } = useQuery({
     queryKey: ["search", debouncedSearch],
@@ -61,10 +70,7 @@ const Navbar = () => {
 
   const { data: cartItems } = useQuery({
     queryKey: ["cart"],
-    queryFn: async () => {
-      const data = await import("@/lib/api").then(m => m.fetchCart());
-      return data;
-    },
+    queryFn: fetchCart,
     enabled: !!user, // Only fetch if user is logged in
   });
 
@@ -86,7 +92,7 @@ const Navbar = () => {
               <span className="font-heading font-bold text-primary-foreground text-2xl">P</span>
             </div>
             <span className="font-heading text-2xl font-bold text-foreground tracking-tight">
-              Pak<span className="text-primary">Nutrition Testing</span>
+              Pak<span className="text-primary">Nutrition</span>
             </span>
           </Link>
 
@@ -108,14 +114,6 @@ const Navbar = () => {
 
           {/* Actions */}
           <div className="flex items-center gap-3">
-            {user?.is_staff && (
-              <a href="/admin">
-                <Button variant="ghost" size="icon" className="hidden md:flex text-muted-foreground hover:text-primary">
-                  <LayoutDashboard className="w-5 h-5" />
-                </Button>
-              </a>
-            )}
-
             {/* Live Search Bar - Desktop */}
             <div className="relative hidden md:block" ref={searchRef}>
               <form onSubmit={handleSearchSubmit}>
@@ -226,18 +224,33 @@ const Navbar = () => {
                 </DropdownMenuContent>
               </DropdownMenu>
             ) : (
-              <Link to="/login">
-                <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-primary">
-                  <User className="w-5 h-5" />
-                </Button>
-              </Link>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-primary">
+                    <User className="w-5 h-5" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-56">
+                  <DropdownMenuLabel>Account</DropdownMenuLabel>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem className="cursor-pointer" asChild>
+                    <Link to="/login">Login</Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem className="cursor-pointer" asChild>
+                    <Link to="/register">Register</Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem className="cursor-pointer" asChild>
+                    <Link to="/guest-orders">Track Guest Order</Link>
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             )}
 
             <Link to="/cart">
               <Button variant="ghost" size="icon" className="relative text-muted-foreground hover:text-primary">
                 <ShoppingCart className="w-5 h-5" />
                 <span className="absolute top-1 right-1 w-4 h-4 bg-primary text-[10px] font-bold text-primary-foreground flex items-center justify-center rounded-full">
-                  {cartItems?.items?.reduce((total: number, item: any) => total + item.quantity, 0) || 0}
+                  {user ? (cartItems?.items?.reduce((total: number, item: any) => total + item.quantity, 0) || 0) : guestCartCount}
                 </span>
               </Button>
             </Link>
@@ -257,12 +270,6 @@ const Navbar = () => {
         {isMenuOpen && (
           <div className="lg:hidden py-4 border-t border-border animate-slide-up bg-background">
             <div className="flex flex-col gap-4">
-              {user?.is_staff && (
-                <a href="/admin" className="font-heading text-sm uppercase tracking-wider text-primary font-bold hover:text-primary/80 transition-colors flex items-center gap-2 px-4 py-2">
-                  <LayoutDashboard className="w-4 h-4" />
-                  Admin Panel
-                </a>
-              )}
               <Link to="/products" className="font-heading font-semibold text-sm uppercase tracking-wider text-muted-foreground hover:text-primary transition-colors px-4 py-2 hover:bg-muted/50 rounded-lg">
                 Products
               </Link>

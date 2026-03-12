@@ -29,31 +29,49 @@ jobs:
             echo "Pulling latest code"
             git pull origin main
 
-            echo "Installing backend requirements"
-            cd backend
-            if [ -d "venv" ]; then
-              source venv/bin/activate
-            elif [ -d ".venv" ]; then
-              source .venv/bin/activate
-            fi
+            echo "Checking backend environment"
+            test -f backend/.env || (echo "Missing backend/.env" && exit 1)
 
+            echo "Setting up backend virtual environment"
+            cd backend
+            if [ -d ".venv" ]; then
+              VENV_PATH=".venv"
+            elif [ -d "venv" ]; then
+              VENV_PATH="venv"
+            else
+              python3 -m venv .venv
+              VENV_PATH=".venv"
+            fi
+            . "${VENV_PATH}/bin/activate"
+
+            echo "Installing backend dependencies"
+            pip install --upgrade pip
             pip install -r requirements.txt
 
-            echo "Running Django migrations"
-            python manage.py migrate
+            echo "Running backend migrations"
+            python manage.py migrate --noinput
 
             echo "Collecting static files"
             python manage.py collectstatic --noinput
 
+            echo "Running Django system checks"
+            python manage.py check
+
             echo "Building frontend"
             cd ../frontend
-            npm install
+            if [ -f package-lock.json ]; then
+              npm ci
+            else
+              npm install
+            fi
             npm run build
 
-            echo "Restarting backend"
-            pm2 restart backend || pm2 start ../backend/manage.py --name backend --interpreter python3 -- runserver 0.0.0.0:8000
+            echo "Restarting application services"
+            sudo systemctl restart ${{ secrets.GUNICORN_SERVICE }}
+            sudo systemctl restart ${{ secrets.NGINX_SERVICE }}
 
-            echo "Reloading nginx"
-            sudo systemctl reload nginx
+            echo "Verifying service status"
+            sudo systemctl is-active ${{ secrets.GUNICORN_SERVICE }}
+            sudo systemctl is-active ${{ secrets.NGINX_SERVICE }}
 
             echo "Deployment completed successfully"

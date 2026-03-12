@@ -1,6 +1,5 @@
 import apiClient from "./apiClient";
-
-const BASE_URL = "http://127.0.0.1:8000/api";
+import { API_ROOT_URL } from "./config";
 
 export const fetchProducts = async (filters?: { category_slug?: string | null; search?: string | null }) => {
     const params = new URLSearchParams();
@@ -42,10 +41,22 @@ export const getImageUrl = (path: string | null) => {
         cleanPath = `/media${cleanPath}`;
     }
 
-    const rootUrl = BASE_URL.replace("/api", "");
-    // Remove trailing slash from rootUrl to avoid double slashes
-    const normalizedRoot = rootUrl.endsWith("/") ? rootUrl.slice(0, -1) : rootUrl;
-    return `${normalizedRoot}${cleanPath}`;
+    return `${API_ROOT_URL}${cleanPath}`;
+};
+
+export const fetchPromotions = async () => {
+    const response = await apiClient.get("/promotions/");
+    return response.data;
+};
+
+export const fetchHomePageSettings = async () => {
+    const response = await apiClient.get("/storefront/homepage-settings/");
+    return response.data;
+};
+
+export const fetchReviews = async (productId: number) => {
+    const response = await apiClient.get(`/reviews/?product_id=${productId}`);
+    return response.data;
 };
 
 // --- Cart ---
@@ -76,22 +87,36 @@ export const syncCart = async (items: { product_id: number; quantity: number }[]
 
 // --- Users / Addresses ---
 export const fetchAddresses = async () => {
-    const response = await apiClient.get("/users/addresses");
+    const response = await apiClient.get("/users/addresses/");
     return response.data;
 };
 
 export const createAddress = async (data: any) => {
-    const response = await apiClient.post("/users/addresses", data);
+    const response = await apiClient.post("/users/addresses/", data);
     return response.data;
 };
 
 export const deleteAddress = async (id: number) => {
-    await apiClient.delete(`/users/addresses/${id}`);
+    await apiClient.delete(`/users/addresses/${id}/`);
     return id;
 };
 
 // --- Orders ---
 export const createOrder = async (data: { address_id: number; payment_method: string }) => {
+    const response = await apiClient.post("/orders/", data);
+    return response.data;
+};
+
+export const createGuestOrder = async (data: {
+    guest_name: string;
+    guest_email: string;
+    guest_phone_number: string;
+    city: string;
+    area: string;
+    street: string;
+    payment_method: string;
+    items: { product_id: number; quantity: number }[];
+}) => {
     const response = await apiClient.post("/orders/", data);
     return response.data;
 };
@@ -103,6 +128,11 @@ export const fetchOrders = async () => {
 
 export const fetchOrderById = async (id: number) => {
     const response = await apiClient.get(`/orders/${id}/`);
+    return response.data;
+};
+
+export const lookupGuestOrder = async (data: { order_id: number; email?: string; phone_number?: string }) => {
+    const response = await apiClient.post("/orders/guest-lookup/", data);
     return response.data;
 };
 
@@ -127,7 +157,7 @@ export const createProduct = async (formData: FormData) => {
 };
 
 export const updateProduct = async (id: number, formData: FormData) => {
-    const response = await apiClient.put(`/admin/products/${id}/`, formData, {
+    const response = await apiClient.patch(`/admin/products/${id}/`, formData, {
         headers: { "Content-Type": "multipart/form-data" },
     });
     return response.data;
@@ -177,6 +207,43 @@ export const deleteCategory = async (id: number) => {
 export const fetchAdminOrders = async () => {
     const response = await apiClient.get("/admin/orders/");
     return response.data;
+};
+
+export const fetchAdminDashboard = async () => {
+    const response = await apiClient.get("/admin/dashboard/");
+    return response.data;
+};
+
+export const fetchAdminCatalogSummary = async () => {
+    const response = await apiClient.get("/admin/catalog-summary/");
+    return response.data;
+};
+
+export const fetchAdminHomePageSettings = async () => {
+    const response = await apiClient.get("/admin/homepage-settings/");
+    return response.data;
+};
+
+export const updateAdminHomePageSettings = async (data: any) => {
+    const response = await apiClient.put("/admin/homepage-settings/", data);
+    return response.data;
+};
+
+export const downloadAdminReport = async (reportKey: "orders" | "customers" | "inventory") => {
+    const response = await apiClient.get(`/admin/reports/${reportKey}/`, {
+        responseType: "blob",
+    });
+
+    const contentDisposition = response.headers["content-disposition"] as string | undefined;
+    const matchedFileName = contentDisposition?.match(/filename=\"?([^"]+)\"?$/)?.[1] || `${reportKey}-report.csv`;
+    const blobUrl = window.URL.createObjectURL(new Blob([response.data]));
+    const link = document.createElement("a");
+    link.href = blobUrl;
+    link.setAttribute("download", matchedFileName);
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.URL.revokeObjectURL(blobUrl);
 };
 
 export const updateOrderStatus = async (id: number, status: string) => {

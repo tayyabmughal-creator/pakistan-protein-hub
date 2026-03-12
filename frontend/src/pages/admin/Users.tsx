@@ -23,7 +23,7 @@ const AdminUsers = () => {
     }, []);
 
     return (
-        <AdminLayout title="Users">
+        <AdminLayout title="Customers">
             <div className="bg-card-gradient border border-border rounded-xl overflow-hidden">
                 <Table>
                     <TableHeader>
@@ -53,7 +53,7 @@ const AdminUsers = () => {
                                         )}
                                     </TableCell>
                                     <TableCell className="text-xs">
-                                        {new Date(user.date_joined).toLocaleDateString()}
+                                        {user.date_joined ? new Date(user.date_joined).toLocaleDateString() : "N/A"}
                                     </TableCell>
                                     <TableCell className="text-right">
                                         <p className="text-xs text-muted-foreground italic">Edit role coming soon</p>

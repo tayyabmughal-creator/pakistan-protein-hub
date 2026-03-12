@@ -1,7 +1,13 @@
 import { Zap, CheckCircle2 } from "lucide-react";
 import heroProtein from "@/assets/hero-protein.png";
 
-const Hero = () => {
+const Hero = ({ settings }: { settings?: any }) => {
+  const stats = [
+    { value: settings?.hero_stat_one_value || "50K+", label: settings?.hero_stat_one_label || "Happy Customers" },
+    { value: settings?.hero_stat_two_value || "100%", label: settings?.hero_stat_two_label || "Authentic Products" },
+    { value: settings?.hero_stat_three_value || "24hr", label: settings?.hero_stat_three_label || "Fast Delivery" },
+  ];
+
   return (
     <section className="relative min-h-[90vh] bg-[#050505] overflow-hidden flex items-center pt-10">
       {/* Background Effects */}
@@ -17,40 +23,34 @@ const Hero = () => {
           <div className="animate-slide-up max-w-2xl">
             <div className="inline-flex items-center gap-2 bg-[#1a1a1a] border border-white/10 rounded-full px-4 py-2 mb-8 backdrop-blur-sm">
               <Zap className="w-4 h-4 text-primary fill-primary" />
-              <span className="text-sm font-medium text-primary tracking-wide">Pakistan's #1 Supplement Store</span>
+              <span className="text-sm font-medium text-primary tracking-wide">{settings?.hero_badge || "PakNutrition Performance Store"}</span>
             </div>
 
             <h1 className="font-heading text-6xl md:text-7xl lg:text-8xl font-bold leading-[0.9] mb-8 text-white">
-              FUEL YOUR
-              <span className="block text-primary">GAINS</span>
+              {settings?.hero_title_line_one || "FUEL YOUR"}
+              <span className="block text-primary">{settings?.hero_title_line_two || "GAINS"}</span>
             </h1>
 
             <p className="text-lg md:text-xl text-gray-400 mb-10 leading-relaxed max-w-lg">
-              Premium quality proteins & supplements delivered across Pakistan. 100% authentic products with COD available.
+              {settings?.hero_description || "Premium quality proteins & supplements delivered across Pakistan. 100% authentic products with COD available."}
             </p>
 
 
 
             {/* Stats */}
             <div className="grid grid-cols-3 gap-8 py-8 border-t border-white/10">
-              <div>
-                <p className="font-heading text-4xl font-bold text-primary mb-1">50K+</p>
-                <p className="text-sm text-gray-400 font-medium">Happy Customers</p>
-              </div>
-              <div>
-                <p className="font-heading text-4xl font-bold text-primary mb-1">100%</p>
-                <p className="text-sm text-gray-400 font-medium">Authentic Products</p>
-              </div>
-              <div>
-                <p className="font-heading text-4xl font-bold text-primary mb-1">24hr</p>
-                <p className="text-sm text-gray-400 font-medium">Fast Delivery</p>
-              </div>
+              {stats.map((stat) => (
+                <div key={stat.label}>
+                  <p className="font-heading text-4xl font-bold text-primary mb-1">{stat.value}</p>
+                  <p className="text-sm text-gray-400 font-medium">{stat.label}</p>
+                </div>
+              ))}
             </div>
           </div>
 
           {/* Hero Image */}
           <div className="relative hidden lg:block h-full">
-            <div className="relative z-10 animate-float duration-[6s]">
+            <div className="relative z-10 animate-float [animation-duration:6s]">
               <div className="relative w-full aspect-square max-w-[600px] mx-auto">
                 {/* Green glow behind image */}
                 <div className="absolute inset-10 bg-primary/20 rounded-full blur-[80px] -z-10" />

@@ -57,7 +57,7 @@ const AdminOrders = () => {
                             orders.map((order) => (
                                 <TableRow key={order.id} className="border-border hover:bg-secondary/30">
                                     <TableCell className="font-bold">#{order.id}</TableCell>
-                                    <TableCell>{order.shipping_address?.full_name || "User #" + order.user}</TableCell>
+                                    <TableCell>{order.shipping_address || `User #${order.user}`}</TableCell>
                                     <TableCell>Rs. {parseFloat(order.total_amount).toLocaleString()}</TableCell>
                                     <TableCell>
                                         <Select

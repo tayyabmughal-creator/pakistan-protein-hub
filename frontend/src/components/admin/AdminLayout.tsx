@@ -20,7 +20,7 @@ const AdminLayout = ({ children, title }: AdminLayoutProps) => {
                 navigate("/");
             } else if (!user.is_staff) {
                 toast.error("Access Denied: Admin privileges required");
-                navigate("/home");
+                navigate("/");
             }
         }
     }, [user, loading, navigate]);

@@ -1,3 +1,7 @@
 from django.urls import path
 
-urlpatterns = []
+from .views import PromotionListView
+
+urlpatterns = [
+    path('promotions/', PromotionListView.as_view(), name='promotion-list'),
+]

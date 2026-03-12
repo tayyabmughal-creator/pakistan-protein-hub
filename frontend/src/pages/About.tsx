@@ -6,7 +6,7 @@ const About = () => {
 
                 <div className="space-y-8 text-gray-300 leading-relaxed text-lg">
                     <p>
-                        Welcome to <span className="text-white font-bold">PowerFuel</span>, Pakistan's premium destination for authentic supplements and fitness nutrition.
+                        Welcome to <span className="text-white font-bold">PakNutrition</span>, Pakistan's premium destination for authentic supplements and fitness nutrition.
                         We are dedicated to fueling your fitness journey with the highest quality products from world-renowned brands.
                     </p>
 

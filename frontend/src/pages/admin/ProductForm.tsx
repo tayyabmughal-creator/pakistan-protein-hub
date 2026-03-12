@@ -1,11 +1,13 @@
 import { useState, useEffect } from "react";
 import { useNavigate, useParams } from "react-router-dom";
+import { useQueryClient } from "@tanstack/react-query";
 import AdminLayout from "@/components/admin/AdminLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
 import { Card, CardContent } from "@/components/ui/card";
 import { toast } from "sonner";
 import { createProduct, updateProduct, fetchAdminCategories, fetchAdminProducts } from "@/lib/api";
@@ -14,6 +16,7 @@ import { Upload, X } from "lucide-react";
 const ProductForm = () => {
     const { id } = useParams();
     const navigate = useNavigate();
+    const queryClient = useQueryClient();
     const isEdit = !!id;
 
     const [categories, setCategories] = useState<any[]>([]);
@@ -27,6 +30,7 @@ const ProductForm = () => {
         stock: "0",
         weight: "",
         description: "",
+        is_active: true,
     });
     const [image, setImage] = useState<File | null>(null);
     const [preview, setPreview] = useState<string | null>(null);
@@ -50,6 +54,7 @@ const ProductForm = () => {
                             stock: product.stock.toString(),
                             weight: product.weight,
                             description: product.description,
+                            is_active: Boolean(product.is_active),
                         });
                         if (product.image) setPreview(product.image);
                     }
@@ -79,7 +84,13 @@ const ProductForm = () => {
 
         const data = new FormData();
         Object.entries(formData).forEach(([key, value]) => {
-            if (value) data.append(key, value);
+            if (typeof value === "boolean") {
+                data.append(key, String(value));
+                return;
+            }
+            if (value !== "") {
+                data.append(key, value);
+            }
         });
         if (image) data.append("image", image);
 
@@ -91,6 +102,8 @@ const ProductForm = () => {
                 await createProduct(data);
                 toast.success("Product created successfully");
             }
+            queryClient.invalidateQueries({ queryKey: ["products"] });
+            queryClient.invalidateQueries({ queryKey: ["search"] });
             navigate("/admin/products");
         } catch (error) {
             toast.error(isEdit ? "Failed to update product" : "Failed to create product");
@@ -148,6 +161,19 @@ const ProductForm = () => {
                                         ))}
                                     </SelectContent>
                                 </Select>
+                            </div>
+                            <div className="flex items-center justify-between rounded-xl border border-border/60 bg-background/40 px-4 py-3">
+                                <div>
+                                    <Label htmlFor="is_active" className="text-sm font-medium">Visible on Storefront</Label>
+                                    <p className="text-xs text-muted-foreground mt-1">
+                                        Turn this off to hide the product from customers.
+                                    </p>
+                                </div>
+                                <Switch
+                                    id="is_active"
+                                    checked={formData.is_active}
+                                    onCheckedChange={(checked) => setFormData({ ...formData, is_active: checked })}
+                                />
                             </div>
                         </CardContent>
                     </Card>

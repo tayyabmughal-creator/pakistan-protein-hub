@@ -92,8 +92,12 @@ class PasswordResetRequestView(APIView):
             token = default_token_generator.make_token(user)
             uid = urlsafe_base64_encode(force_bytes(user.pk))
             
-            # Use frontend URL (assumed to be running on localhost:5173 for now, or configured via settings)
-            frontend_url = "http://localhost:8080" 
+            frontend_url = getattr(settings, 'FRONTEND_URL', '').rstrip('/')
+            if not frontend_url:
+                return Response(
+                    {"detail": "FRONTEND_URL is not configured."},
+                    status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                )
             reset_link = f"{frontend_url}/reset-password/{uid}/{token}/"
 
             # Send email

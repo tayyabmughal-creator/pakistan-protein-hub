@@ -4,7 +4,6 @@ import { fetchOrders, getImageUrl } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 import Loader from "@/components/Loader";
 import PageHeader from "@/components/PageHeader";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ArrowRight, Package } from "lucide-react";
 
@@ -45,7 +44,7 @@ const Orders = () => {
                     <Package className="w-16 h-16 text-muted-foreground mx-auto mb-4" />
                     <h3 className="text-xl font-bold mb-2">No orders found</h3>
                     <p className="text-muted-foreground mb-6">You haven't placed any orders yet.</p>
-                    <Link to="/home"><Button>Start Shopping</Button></Link>
+                    <Link to="/products"><Button>Start Shopping</Button></Link>
                 </div>
             ) : (
                 <div className="space-y-4">

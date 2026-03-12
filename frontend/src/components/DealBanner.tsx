@@ -3,7 +3,7 @@ import { Button } from "./ui/button";
 import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 
-const DealBanner = () => {
+const DealBanner = ({ settings }: { settings?: any }) => {
   const [timeLeft, setTimeLeft] = useState({
     days: 20,
     hours: 0,
@@ -12,13 +12,9 @@ const DealBanner = () => {
   });
 
   useEffect(() => {
-    // Set target date to 20 days from now (persisted in local storage or just reset for demo)
-    // For this specific request, I'll make it a 20 day countdown loop or just static 20 days decerementing.
-    // Better approach: Set a fixed future date so it's consistent.
-
-    // Let's use a standard countdown approach
-    const targetDate = new Date();
-    targetDate.setDate(targetDate.getDate() + 20);
+    const targetDate = settings?.deal_target_date
+      ? new Date(settings.deal_target_date)
+      : new Date(Date.now() + 20 * 24 * 60 * 60 * 1000);
 
     const interval = setInterval(() => {
       const now = new Date();
@@ -38,7 +34,12 @@ const DealBanner = () => {
     }, 1000);
 
     return () => clearInterval(interval);
-  }, []);
+  }, [settings?.deal_target_date]);
+
+  const dealTitle = settings?.deal_title || "MEGA SALE";
+  const [dealTitlePrefix, dealTitleAccent] = dealTitle.includes(" ")
+    ? [dealTitle.split(" ").slice(0, -1).join(" "), dealTitle.split(" ").slice(-1)[0]]
+    : ["", dealTitle];
 
   return (
     <section id="deals" className="py-20 bg-hero-gradient relative overflow-hidden">
@@ -52,19 +53,19 @@ const DealBanner = () => {
         <div className="bg-card-gradient rounded-3xl border border-primary/30 p-8 md:p-12 text-center animate-pulse-glow">
           <div className="inline-flex items-center gap-2 bg-primary/20 rounded-full px-4 py-2 mb-6">
             <Timer className="w-5 h-5 text-primary" />
-            <span className="font-heading text-sm uppercase tracking-wider text-primary">Limited Time Offer</span>
+            <span className="font-heading text-sm uppercase tracking-wider text-primary">{settings?.deal_badge || "Limited Time Offer"}</span>
           </div>
 
           <h2 className="font-heading text-4xl md:text-6xl font-bold text-foreground mb-4">
-            MEGA <span className="text-gradient">SALE</span>
+            {dealTitlePrefix ? `${dealTitlePrefix} ` : ""}<span className="text-gradient">{dealTitleAccent}</span>
           </h2>
 
           <p className="text-xl md:text-2xl text-muted-foreground mb-2">
-            Up to <span className="text-primary font-bold">50% OFF</span> on all proteins
+            {settings?.deal_subtitle || "Up to 50% OFF on all proteins"}
           </p>
 
           <p className="text-muted-foreground mb-8">
-            Use code: <span className="font-mono bg-primary/20 text-primary px-3 py-1 rounded-lg font-bold">POWER50</span>
+            Use code: <span className="font-mono bg-primary/20 text-primary px-3 py-1 rounded-lg font-bold">{settings?.deal_code || "POWER50"}</span>
           </p>
 
           {/* Countdown */}

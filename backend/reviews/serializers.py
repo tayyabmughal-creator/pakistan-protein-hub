@@ -3,10 +3,18 @@ from .models import Review
 from orders.models import Order, OrderItem
 
 class ReviewSerializer(serializers.ModelSerializer):
+    user_name = serializers.SerializerMethodField()
+
     class Meta:
         model = Review
-        fields = ['id', 'user', 'product', 'rating', 'comment', 'created_at']
+        fields = ['id', 'user', 'user_name', 'product', 'rating', 'comment', 'created_at']
         read_only_fields = ['user', 'created_at']
+
+    def get_user_name(self, obj):
+        full_name = getattr(obj.user, "name", "") or ""
+        if full_name.strip():
+            return full_name.strip()
+        return "Verified Buyer"
 
     def validate(self, attrs):
         request = self.context.get('request')

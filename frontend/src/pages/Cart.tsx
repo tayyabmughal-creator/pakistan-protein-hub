@@ -7,6 +7,7 @@ import { useAuth } from "@/context/AuthContext";
 import { toast } from "sonner";
 import Loader from "@/components/Loader";
 import PageHeader from "@/components/PageHeader";
+import { getGuestCartItems, removeGuestCartItem, updateGuestCartItem } from "@/lib/guestCart";
 
 interface CartItem {
     id: number;
@@ -33,9 +34,22 @@ const Cart = () => {
     const loadCart = async () => {
         try {
             setLoading(true);
-            const data = await fetchCart();
-            // Backend response: { id, user, created_at, updated_at, items: [...] }
-            setItems(data.items || []);
+            if (user) {
+                const data = await fetchCart();
+                setItems(data.items || []);
+            } else {
+                const guestItems = getGuestCartItems().map((item) => ({
+                    id: item.product.id,
+                    product: {
+                        ...item.product,
+                        price: String(item.product.price),
+                        final_price: item.product.final_price ? String(item.product.final_price) : undefined,
+                    },
+                    quantity: item.quantity,
+                    total_price: Number(item.product.final_price || item.product.price) * item.quantity,
+                }));
+                setItems(guestItems);
+            }
         } catch (error) {
             toast.error("Failed to load cart");
         } finally {
@@ -44,12 +58,7 @@ const Cart = () => {
     };
 
     useEffect(() => {
-        if (user) {
-            loadCart();
-        } else {
-            // Handle guest cart if implemented, else redirect/show empty
-            setLoading(false);
-        }
+        loadCart();
     }, [user]);
 
     const handleUpdateQuantity = async (itemId: number, newQty: number, maxStock: number) => {
@@ -58,11 +67,13 @@ const Cart = () => {
 
         setUpdating(itemId);
         try {
-            const updatedCart = await updateCartItem(itemId, newQty);
-            // Backend returns full cart usually or the item
-            // For now, let's reload or trust the return if it's the full cart object structure
-            // Ideally backend returns full cart serializer on update
-            setItems(updatedCart.items || []);
+            if (user) {
+                const updatedCart = await updateCartItem(itemId, newQty);
+                setItems(updatedCart.items || []);
+            } else {
+                updateGuestCartItem(itemId, newQty);
+                loadCart();
+            }
         } catch (error) {
             toast.error("Failed to update quantity");
         } finally {
@@ -73,8 +84,13 @@ const Cart = () => {
     const handleRemoveItem = async (itemId: number) => {
         try {
             setUpdating(itemId);
-            const updatedCart = await removeCartItem(itemId);
-            setItems(updatedCart.items || []);
+            if (user) {
+                const updatedCart = await removeCartItem(itemId);
+                setItems(updatedCart.items || []);
+            } else {
+                removeGuestCartItem(itemId);
+                loadCart();
+            }
             toast.success("Item removed");
         } catch (error) {
             toast.error("Failed to remove item");
@@ -106,17 +122,6 @@ const Cart = () => {
                 <Loader size={40} />
             </div>
         );
-    }
-
-    if (!user) {
-        return (
-            <div className="container mx-auto px-4 py-20 text-center">
-                <h2 className="text-2xl font-bold mb-4">Please log in to view your cart</h2>
-                <Link to="/login">
-                    <Button>Log In</Button>
-                </Link>
-            </div>
-        )
     }
 
     if (items.length === 0) {

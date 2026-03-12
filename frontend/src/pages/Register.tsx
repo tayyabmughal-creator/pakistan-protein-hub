@@ -6,6 +6,7 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { toast } from "sonner";
 import { UserPlus, Loader2, ArrowRight } from "lucide-react";
+import apiClient from "@/lib/apiClient";
 
 const Register = () => {
     const [name, setName] = useState("");
@@ -19,26 +20,18 @@ const Register = () => {
         setLoading(true);
 
         try {
-            const response = await fetch("http://127.0.0.1:8000/api/users/register", {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json",
-                },
-                body: JSON.stringify({ name, email, password }),
+            await apiClient.post("/users/register/", { name, email, password });
+            toast.success("Registration successful!", {
+                description: "Please login with your new account."
             });
-
-            const data = await response.json();
-
-            if (response.ok) {
-                toast.success("Registration successful!", {
-                    description: "Please login with your new account."
-                });
-                navigate("/login");
-            } else {
-                toast.error(data.message || "Registration failed");
-            }
-        } catch (error) {
-            toast.error("Something went wrong. Please try again.");
+            navigate("/login");
+        } catch (error: any) {
+            const message =
+                error.response?.data?.email?.[0] ||
+                error.response?.data?.password?.[0] ||
+                error.response?.data?.name?.[0] ||
+                "Registration failed";
+            toast.error(message);
         } finally {
             setLoading(false);
         }

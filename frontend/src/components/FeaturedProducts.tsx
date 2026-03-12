@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import ProductCard from "./ProductCard";
 import { fetchProducts, addToCart } from "@/lib/api";
+import { addGuestCartItem } from "@/lib/guestCart";
 import { Skeleton } from "./ui/skeleton";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "@/context/AuthContext";
@@ -35,8 +36,23 @@ const FeaturedProducts = () => {
   });
 
   const handleAddToCart = async (id: number) => {
+    const product = products.find((entry: any) => entry.id === id);
+    if (!product) return;
+
     if (!user) {
-      navigate("/login");
+      addGuestCartItem({
+        id: product.id,
+        name: product.name,
+        slug: product.slug,
+        image: product.image,
+        price: product.price,
+        final_price: product.final_price,
+        stock: product.stock,
+      }, 1);
+      toast({
+        title: "Added to cart",
+        description: "Product has been added to your cart.",
+      });
       return;
     }
     await addToCartMutation.mutateAsync({ id, quantity: 1 });
