@@ -86,7 +86,7 @@ const Navbar = () => {
               <span className="font-heading font-bold text-primary-foreground text-2xl">P</span>
             </div>
             <span className="font-heading text-2xl font-bold text-foreground tracking-tight">
-              Pak<span className="text-primary">Nutrition</span>
+              Pak<span className="text-primary">Nutrition Testing</span>
             </span>
           </Link>
 
