@@ -26,11 +26,13 @@ jobs:
             echo "Going to project folder"
             cd ${{ secrets.PROJECT_PATH }}
 
-            echo "Pulling latest code"
-            git pull origin main
+            echo "Resetting server repo to origin/main"
+            git fetch origin main
+            git reset --hard origin/main
 
             echo "Checking backend environment"
             test -f backend/.env || (echo "Missing backend/.env" && exit 1)
+            test -f frontend/.env || (echo "Missing frontend/.env" && exit 1)
 
             echo "Setting up backend virtual environment"
             cd backend
