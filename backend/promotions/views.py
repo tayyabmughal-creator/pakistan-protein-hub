@@ -18,3 +18,15 @@ class PromotionListView(generics.ListAPIView):
             valid_to__gte=now,
             used_count__lt=F('usage_limit'),
         ).order_by('valid_to')
+
+
+class AdminPromotionListCreateView(generics.ListCreateAPIView):
+    serializer_class = PromotionSerializer
+    permission_classes = [permissions.IsAdminUser]
+    queryset = Promotion.objects.all().order_by("-valid_to", "-id")
+
+
+class AdminPromotionDetailView(generics.RetrieveUpdateDestroyAPIView):
+    serializer_class = PromotionSerializer
+    permission_classes = [permissions.IsAdminUser]
+    queryset = Promotion.objects.all()

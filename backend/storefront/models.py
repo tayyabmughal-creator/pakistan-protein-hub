@@ -3,6 +3,7 @@ from datetime import timedelta
 from django.db import OperationalError, ProgrammingError
 from django.db import models
 from django.utils import timezone
+from promotions.models import Promotion
 
 
 class HomePageSettings(models.Model):
@@ -22,10 +23,16 @@ class HomePageSettings(models.Model):
     deal_title = models.CharField(max_length=120, default="MEGA SALE")
     deal_subtitle = models.CharField(max_length=160, default="Up to 50% OFF on all proteins")
     deal_code = models.CharField(max_length=40, default="POWER50")
+    deal_enabled = models.BooleanField(default=True)
     deal_target_date = models.DateTimeField(default=timezone.now)
+    featured_promotion = models.ForeignKey(Promotion, null=True, blank=True, on_delete=models.SET_NULL, related_name="homepage_features")
     support_email = models.EmailField(blank=True, default="")
     support_phone = models.CharField(max_length=32, blank=True, default="")
     announcement_text = models.CharField(max_length=180, blank=True, default="")
+    facebook_url = models.URLField(blank=True, default="")
+    instagram_url = models.URLField(blank=True, default="")
+    tiktok_url = models.URLField(blank=True, default="")
+    youtube_url = models.URLField(blank=True, default="")
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:

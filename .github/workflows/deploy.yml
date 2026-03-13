@@ -50,6 +50,9 @@ jobs:
             pip install --upgrade pip
             pip install -r requirements.txt
 
+            echo "Validating configured database connection"
+            python manage.py shell -c "from django.conf import settings; db = settings.DATABASES['default']; print(f\"ENGINE={db.get('ENGINE')}\"); print(f\"NAME={db.get('NAME')}\"); print(f\"HOST={db.get('HOST', '')}\")"
+
             echo "Running backend migrations"
             python manage.py migrate --noinput
 

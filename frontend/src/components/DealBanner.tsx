@@ -4,6 +4,13 @@ import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 
 const DealBanner = ({ settings }: { settings?: any }) => {
+  const targetDate = settings?.effective_deal_target_date
+    ? new Date(settings.effective_deal_target_date)
+    : settings?.deal_target_date
+    ? new Date(settings.deal_target_date)
+    : new Date(Date.now() + 20 * 24 * 60 * 60 * 1000);
+  const isEnabled = settings?.deal_enabled ?? true;
+  const [isExpired, setIsExpired] = useState(settings?.deal_is_expired ?? targetDate.getTime() <= Date.now());
   const [timeLeft, setTimeLeft] = useState({
     days: 20,
     hours: 0,
@@ -12,18 +19,24 @@ const DealBanner = ({ settings }: { settings?: any }) => {
   });
 
   useEffect(() => {
-    const targetDate = settings?.deal_target_date
-      ? new Date(settings.deal_target_date)
-      : new Date(Date.now() + 20 * 24 * 60 * 60 * 1000);
+    if (!isEnabled) {
+      return;
+    }
+
+    setIsExpired(settings?.deal_is_expired ?? targetDate.getTime() <= Date.now());
 
     const interval = setInterval(() => {
       const now = new Date();
       const difference = targetDate.getTime() - now.getTime();
 
       if (difference <= 0) {
+        setIsExpired(true);
+        setTimeLeft({ days: 0, hours: 0, minutes: 0, seconds: 0 });
         clearInterval(interval);
         return;
       }
+
+      setIsExpired(false);
 
       const days = Math.floor(difference / (1000 * 60 * 60 * 24));
       const hours = Math.floor((difference % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
@@ -34,7 +47,17 @@ const DealBanner = ({ settings }: { settings?: any }) => {
     }, 1000);
 
     return () => clearInterval(interval);
-  }, [settings?.deal_target_date]);
+  }, [targetDate, isEnabled, settings?.deal_is_expired]);
+
+  const hasFeaturedPromotion = !!settings?.featured_promotion_id || !!settings?.featured_promotion;
+
+  if (!isEnabled) {
+    return null;
+  }
+
+  if (hasFeaturedPromotion && isExpired) {
+    return null;
+  }
 
   const dealTitle = settings?.deal_title || "MEGA SALE";
   const [dealTitlePrefix, dealTitleAccent] = dealTitle.includes(" ")
@@ -50,10 +73,12 @@ const DealBanner = ({ settings }: { settings?: any }) => {
       </div>
 
       <div className="container mx-auto px-4 relative z-10">
-        <div className="bg-card-gradient rounded-3xl border border-primary/30 p-8 md:p-12 text-center animate-pulse-glow">
-          <div className="inline-flex items-center gap-2 bg-primary/20 rounded-full px-4 py-2 mb-6">
+        <div className={`rounded-3xl p-8 md:p-12 text-center transition-all ${isExpired ? "bg-[#111111] border border-white/10 opacity-90" : "bg-card-gradient border border-primary/30 animate-pulse-glow"}`}>
+          <div className={`inline-flex items-center gap-2 rounded-full px-4 py-2 mb-6 ${isExpired ? "bg-white/10" : "bg-primary/20"}`}>
             <Timer className="w-5 h-5 text-primary" />
-            <span className="font-heading text-sm uppercase tracking-wider text-primary">{settings?.deal_badge || "Limited Time Offer"}</span>
+            <span className="font-heading text-sm uppercase tracking-wider text-primary">
+              {isExpired ? "Offer Ended" : settings?.deal_badge || "Limited Time Offer"}
+            </span>
           </div>
 
           <h2 className="font-heading text-4xl md:text-6xl font-bold text-foreground mb-4">
@@ -64,9 +89,15 @@ const DealBanner = ({ settings }: { settings?: any }) => {
             {settings?.deal_subtitle || "Up to 50% OFF on all proteins"}
           </p>
 
-          <p className="text-muted-foreground mb-8">
-            Use code: <span className="font-mono bg-primary/20 text-primary px-3 py-1 rounded-lg font-bold">{settings?.deal_code || "POWER50"}</span>
+          <p className="mb-6 text-sm uppercase tracking-[0.3em] text-gray-500">
+            Featured campaign
           </p>
+
+          {!isExpired && settings?.effective_deal_code && (
+            <p className="text-muted-foreground mb-8">
+              Use code: <span className="font-mono bg-primary/20 text-primary px-3 py-1 rounded-lg font-bold">{settings.effective_deal_code}</span>
+            </p>
+          )}
 
           {/* Countdown */}
           <div className="flex justify-center gap-4 mb-8">

@@ -1,6 +1,20 @@
-import { Facebook, Instagram, Twitter, Mail, Phone, MapPin } from "lucide-react";
+import { Facebook, Instagram, Mail, Phone, MapPin, Music2, Youtube } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
+import { fetchHomePageSettings } from "@/lib/api";
 
 const Footer = () => {
+  const { data: settings } = useQuery({
+    queryKey: ["homepage-settings"],
+    queryFn: fetchHomePageSettings,
+  });
+
+  const socialLinks = [
+    { href: settings?.facebook_url, label: "Facebook", icon: Facebook },
+    { href: settings?.instagram_url, label: "Instagram", icon: Instagram },
+    { href: settings?.tiktok_url, label: "TikTok", icon: Music2 },
+    { href: settings?.youtube_url, label: "YouTube", icon: Youtube },
+  ].filter((item) => item.href);
+
   return (
     <footer className="bg-[#050505] border-t border-white/10 pt-16 pb-8">
       <div className="container mx-auto px-4">
@@ -18,17 +32,22 @@ const Footer = () => {
             <p className="text-gray-400 mb-6">
               PakNutrition is Pakistan's premium supplement store. Authentic products, honest pricing, and fast delivery.
             </p>
-            <div className="flex gap-4">
-              <a href="#" className="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center text-gray-400 hover:bg-primary hover:text-black transition-all">
-                <Facebook className="w-5 h-5" />
-              </a>
-              <a href="#" className="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center text-gray-400 hover:bg-primary hover:text-black transition-all">
-                <Instagram className="w-5 h-5" />
-              </a>
-              <a href="#" className="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center text-gray-400 hover:bg-primary hover:text-black transition-all">
-                <Twitter className="w-5 h-5" />
-              </a>
-            </div>
+            {socialLinks.length > 0 && (
+              <div className="flex gap-4">
+                {socialLinks.map((item) => (
+                  <a
+                    key={item.label}
+                    href={item.href}
+                    target="_blank"
+                    rel="noreferrer"
+                    aria-label={item.label}
+                    className="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center text-gray-400 hover:bg-primary hover:text-black transition-all"
+                  >
+                    <item.icon className="w-5 h-5" />
+                  </a>
+                ))}
+              </div>
+            )}
           </div>
 
           {/* Quick Links */}

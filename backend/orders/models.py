@@ -1,6 +1,7 @@
 from django.db import models
 from django.conf import settings
 from products.models import Product
+from promotions.models import Promotion
 
 class Order(models.Model):
     ORDER_STATUS_CHOICES = (
@@ -23,6 +24,10 @@ class Order(models.Model):
     guest_name = models.CharField(max_length=255, blank=True)
     guest_email = models.EmailField(blank=True)
     guest_phone_number = models.CharField(max_length=20, blank=True)
+    promotion = models.ForeignKey(Promotion, null=True, blank=True, on_delete=models.SET_NULL, related_name='orders')
+    applied_promo_code = models.CharField(max_length=50, blank=True)
+    subtotal_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    discount_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     total_amount = models.DecimalField(max_digits=12, decimal_places=2)
     shipping_address = models.TextField() # Snapshot of address
     payment_method = models.CharField(max_length=10, choices=PAYMENT_METHOD_CHOICES, default='COD')

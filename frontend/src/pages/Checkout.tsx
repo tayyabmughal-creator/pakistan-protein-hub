@@ -2,7 +2,8 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Check, Plus, MapPin, Truck, CreditCard } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { fetchCart, fetchAddresses, createOrder, createGuestOrder } from "@/lib/api";
+import { fetchCart, fetchAddresses, createOrder, createGuestOrder, fetchPromotions } from "@/lib/api";
+import { previewPromotion } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 import { toast } from "sonner";
 import Loader from "@/components/Loader";
@@ -12,6 +13,7 @@ import { clearGuestCart, getGuestCartItems } from "@/lib/guestCart";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { clearAppliedPromoCode, getAppliedPromoCode } from "@/lib/promoSession";
 
 interface Address {
     id: number;
@@ -43,6 +45,8 @@ const Checkout = () => {
     const [selectedAddressId, setSelectedAddressId] = useState<number | null>(null);
     const [showAddressForm, setShowAddressForm] = useState(false);
     const [placingOrder, setPlacingOrder] = useState(false);
+    const [promoPreview, setPromoPreview] = useState<any | null>(null);
+    const [hasActiveDeals, setHasActiveDeals] = useState(false);
     const [guestForm, setGuestForm] = useState<GuestFormValues>({
         guest_name: "",
         guest_email: "",
@@ -122,6 +126,27 @@ const Checkout = () => {
                 return sum + (price * item.quantity);
             }, 0);
             setCartTotal(subtotal);
+            const activePromotions = await fetchPromotions();
+            const hasDeals = (activePromotions || []).length > 0;
+            setHasActiveDeals(hasDeals);
+            const storedPromo = getAppliedPromoCode();
+            if (storedPromo && hasDeals) {
+                try {
+                    const preview = await previewPromotion({
+                        promo_code: storedPromo,
+                        items: user ? undefined : cartData.items.map((item: any) => ({ product_id: item.product.id, quantity: item.quantity })),
+                    });
+                    setPromoPreview(preview);
+                } catch {
+                    clearAppliedPromoCode();
+                    setPromoPreview(null);
+                }
+            } else {
+                if (!hasDeals) {
+                    clearAppliedPromoCode();
+                }
+                setPromoPreview(null);
+            }
 
             if (user) {
                 const addressData = await fetchAddresses();
@@ -159,7 +184,8 @@ const Checkout = () => {
                 }
                 order = await createOrder({
                     address_id: selectedAddressId,
-                    payment_method: "COD"
+                    payment_method: "COD",
+                    promo_code: promoPreview?.code,
                 });
                 navigate(`/orders/${order.id}`);
             } else {
@@ -175,14 +201,17 @@ const Checkout = () => {
                 order = await createGuestOrder({
                     ...guestForm,
                     payment_method: "COD",
+                    promo_code: promoPreview?.code,
                     items: guestItems.map((item) => ({
                         product_id: item.product.id,
                         quantity: item.quantity,
                     })),
                 });
                 clearGuestCart();
+                clearAppliedPromoCode();
                 navigate("/guest-order-confirmation", { state: { order } });
             }
+            clearAppliedPromoCode();
             toast.success("Order placed successfully!");
         } catch (error: any) {
             console.error("Order placement error:", error);
@@ -207,7 +236,8 @@ const Checkout = () => {
     }
 
     const shipping = cartTotal > 5000 ? 0 : 250;
-    const finalTotal = cartTotal + shipping;
+    const discount = Number(promoPreview?.discount_amount || 0);
+    const finalTotal = cartTotal - discount + shipping;
 
     return (
         <div className="container mx-auto px-4 py-8">
@@ -325,6 +355,12 @@ const Checkout = () => {
                                 <span>Subtotal</span>
                                 <span className="text-foreground font-medium">PKR {cartTotal.toLocaleString()}</span>
                             </div>
+                            {discount > 0 && (
+                                <div className="flex justify-between text-green-400">
+                                    <span>Promo Discount {promoPreview?.code ? `(${promoPreview.code})` : ""}</span>
+                                    <span>-PKR {discount.toLocaleString()}</span>
+                                </div>
+                            )}
                             <div className="flex justify-between text-muted-foreground">
                                 <span>Shipping</span>
                                 <span className="text-foreground font-medium">{shipping === 0 ? "Free" : `PKR ${shipping}`}</span>

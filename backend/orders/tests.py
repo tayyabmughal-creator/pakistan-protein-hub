@@ -4,8 +4,11 @@ from rest_framework.test import APITestCase
 
 from cart.models import Cart, CartItem
 from products.models import Category, Product
+from promotions.models import Promotion
 from users.models import Address
 from .models import Order
+from django.utils import timezone
+from datetime import timedelta
 
 
 User = get_user_model()
@@ -43,6 +46,16 @@ class OrderApiTests(APITestCase):
         cart = Cart.objects.create(user=self.user)
         CartItem.objects.create(cart=cart, product=self.product, quantity=2)
         self.client.force_authenticate(user=self.user)
+        self.promotion = Promotion.objects.create(
+            code="SAVE10",
+            description="Ten off",
+            discount_percentage=10,
+            valid_from=timezone.now() - timedelta(days=1),
+            valid_to=timezone.now() + timedelta(days=1),
+            active=True,
+            usage_limit=10,
+            used_count=0,
+        )
 
     def test_create_order_moves_cart_items_into_order_and_deducts_stock(self):
         response = self.client.post(
@@ -58,6 +71,21 @@ class OrderApiTests(APITestCase):
         self.assertEqual(str(order.total_amount), "24000.00")
         self.assertEqual(self.product.stock, 8)
         self.assertEqual(self.user.cart.items.count(), 0)
+
+    def test_create_order_applies_promotion_discount(self):
+        response = self.client.post(
+            "/api/orders/",
+            {"address_id": self.address.id, "payment_method": "COD", "promo_code": "SAVE10"},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        order = Order.objects.get(user=self.user)
+        self.assertEqual(str(order.subtotal_amount), "24000.00")
+        self.assertEqual(str(order.discount_amount), "2400.00")
+        self.assertEqual(str(order.total_amount), "21600.00")
+        self.assertEqual(order.applied_promo_code, "SAVE10")
+        self.promotion.refresh_from_db()
+        self.assertEqual(self.promotion.used_count, 1)
 
     def test_cancel_pending_order_restores_stock(self):
         order = Order.objects.create(
@@ -108,6 +136,20 @@ class OrderApiTests(APITestCase):
         self.assertIsNone(order.user)
         self.assertEqual(order.items.count(), 1)
         self.assertEqual(self.product.stock, 8)
+
+    def test_guest_promo_preview_returns_discounted_totals(self):
+        self.client.force_authenticate(user=None)
+        response = self.client.post(
+            "/api/orders/promo-preview/",
+            {
+                "promo_code": "SAVE10",
+                "items": [{"product_id": self.product.id, "quantity": 2}],
+            },
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["code"], "SAVE10")
+        self.assertEqual(str(response.data["discount_amount"]), "2400.00")
 
     def test_guest_can_lookup_order_by_reference_and_email(self):
         self.client.force_authenticate(user=None)

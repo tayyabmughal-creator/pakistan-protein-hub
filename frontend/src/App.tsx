@@ -33,6 +33,7 @@ const AdminAnalytics = lazy(() => import("./pages/admin/Analytics"));
 const AdminProducts = lazy(() => import("./pages/admin/Products"));
 const ProductForm = lazy(() => import("./pages/admin/ProductForm"));
 const AdminCategories = lazy(() => import("./pages/admin/Categories"));
+const AdminPromotions = lazy(() => import("./pages/admin/Promotions"));
 const AdminOrders = lazy(() => import("./pages/admin/Orders"));
 const AdminUsers = lazy(() => import("./pages/admin/Users"));
 const AdminHomepageSettings = lazy(() => import("./pages/admin/HomepageSettings"));
@@ -99,6 +100,7 @@ const App = () => (
                 <Route path="/admin/products/add" element={<ProtectedRoute><ProductForm /></ProtectedRoute>} />
                 <Route path="/admin/products/edit/:id" element={<ProtectedRoute><ProductForm /></ProtectedRoute>} />
                 <Route path="/admin/categories" element={<ProtectedRoute><AdminCategories /></ProtectedRoute>} />
+                <Route path="/admin/promotions" element={<ProtectedRoute><AdminPromotions /></ProtectedRoute>} />
                 <Route path="/admin/orders" element={<ProtectedRoute><AdminOrders /></ProtectedRoute>} />
                 <Route path="/admin/users" element={<ProtectedRoute><AdminUsers /></ProtectedRoute>} />
                 <Route path="/admin/customers" element={<ProtectedRoute><AdminUsers /></ProtectedRoute>} />

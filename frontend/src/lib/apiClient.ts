@@ -24,6 +24,14 @@ apiClient.interceptors.request.use(
 let isRefreshing = false;
 let failedQueue: any[] = [];
 
+const AUTH_REDIRECT_EXCLUDED_PATHS = new Set([
+    "/users/login/",
+    "/users/register/",
+    "/users/forgot-password/",
+    "/users/reset-password/",
+    "/users/token/refresh/",
+]);
+
 const processQueue = (error: any, token: string | null = null) => {
     failedQueue.forEach((prom) => {
         if (error) {
@@ -40,8 +48,14 @@ apiClient.interceptors.response.use(
     (response) => response,
     async (error) => {
         const originalRequest = error.config;
+        const requestPath = originalRequest?.url ?? "";
+        const shouldSkipAuthRedirect = AUTH_REDIRECT_EXCLUDED_PATHS.has(requestPath);
 
         if (error.response?.status === 401 && !originalRequest._retry) {
+            if (shouldSkipAuthRedirect) {
+                return Promise.reject(error);
+            }
+
             if (isRefreshing) {
                 return new Promise(function (resolve, reject) {
                     failedQueue.push({ resolve, reject });
@@ -94,7 +108,7 @@ apiClient.interceptors.response.use(
                 localStorage.removeItem("token");
                 localStorage.removeItem("refreshToken");
                 localStorage.removeItem("user");
-                window.location.href = "/";
+                window.location.href = "/login";
             }
         }
 

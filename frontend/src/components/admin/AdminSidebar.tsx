@@ -1,4 +1,4 @@
-import { LayoutDashboard, Package, ListTree, ShoppingCart, Users, BarChart3, FileDown, Settings2, LogOut, ChevronRight } from "lucide-react";
+import { LayoutDashboard, Package, ListTree, ShoppingCart, Users, BarChart3, FileDown, Settings2, LogOut, ChevronRight, Store, BadgePercent } from "lucide-react";
 import { Link, useLocation } from "react-router-dom";
 import { cn } from "@/lib/utils";
 
@@ -11,6 +11,7 @@ const AdminSidebar = () => {
         { title: "Customers", icon: Users, path: "/admin/customers" },
         { title: "Products", icon: Package, path: "/admin/products" },
         { title: "Categories", icon: ListTree, path: "/admin/categories" },
+        { title: "Deals", icon: BadgePercent, path: "/admin/promotions" },
         { title: "Orders", icon: ShoppingCart, path: "/admin/orders" },
         { title: "Homepage", icon: Settings2, path: "/admin/homepage" },
         { title: "Reports", icon: FileDown, path: "/admin/reports" },
@@ -19,7 +20,7 @@ const AdminSidebar = () => {
     return (
         <aside className="w-64 h-screen bg-card-gradient border-r border-border sticky top-0 flex flex-col p-6 overflow-y-auto">
             <div className="mb-10 pl-2">
-                <h2 className="text-2xl font-heading font-bold gradient-text">PPH ADMIN</h2>
+                <h2 className="text-2xl font-heading font-bold gradient-text">PakNutrition Admin</h2>
                 <p className="text-xs text-muted-foreground uppercase tracking-widest mt-1">Management Portal</p>
             </div>
 
@@ -48,6 +49,13 @@ const AdminSidebar = () => {
             </nav>
 
             <div className="mt-auto pt-6 border-t border-border">
+                <Link
+                    to="/"
+                    className="mb-3 flex w-full items-center gap-3 rounded-xl px-4 py-3 text-muted-foreground transition-colors hover:bg-secondary/50 hover:text-foreground"
+                >
+                    <Store className="w-5 h-5 text-primary" />
+                    <span className="font-medium">View Store</span>
+                </Link>
                 <button
                     onClick={() => {
                         localStorage.removeItem("token");

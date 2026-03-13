@@ -2,12 +2,14 @@ import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Trash2, Plus, Minus, ArrowRight, ShoppingBag } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { fetchCart, updateCartItem, removeCartItem, getImageUrl } from "@/lib/api";
+import { fetchCart, updateCartItem, removeCartItem, getImageUrl, previewPromotion, fetchPromotions } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 import { toast } from "sonner";
 import Loader from "@/components/Loader";
 import PageHeader from "@/components/PageHeader";
 import { getGuestCartItems, removeGuestCartItem, updateGuestCartItem } from "@/lib/guestCart";
+import { clearAppliedPromoCode, getAppliedPromoCode, setAppliedPromoCode } from "@/lib/promoSession";
+import { Input } from "@/components/ui/input";
 
 interface CartItem {
     id: number;
@@ -30,6 +32,10 @@ const Cart = () => {
     const [items, setItems] = useState<CartItem[]>([]);
     const [loading, setLoading] = useState(true);
     const [updating, setUpdating] = useState<number | null>(null);
+    const [promoCode, setPromoCode] = useState(getAppliedPromoCode());
+    const [promoPreview, setPromoPreview] = useState<any | null>(null);
+    const [applyingPromo, setApplyingPromo] = useState(false);
+    const [hasActiveDeals, setHasActiveDeals] = useState(false);
 
     const loadCart = async () => {
         try {
@@ -50,6 +56,8 @@ const Cart = () => {
                 }));
                 setItems(guestItems);
             }
+            const activePromotions = await fetchPromotions();
+            setHasActiveDeals((activePromotions || []).length > 0);
         } catch (error) {
             toast.error("Failed to load cart");
         } finally {
@@ -60,6 +68,20 @@ const Cart = () => {
     useEffect(() => {
         loadCart();
     }, [user]);
+
+    useEffect(() => {
+        if (!items.length) {
+            setPromoPreview(null);
+        }
+    }, [items.length]);
+
+    useEffect(() => {
+        if (!hasActiveDeals) {
+            setPromoPreview(null);
+            setPromoCode("");
+            clearAppliedPromoCode();
+        }
+    }, [hasActiveDeals]);
 
     const handleUpdateQuantity = async (itemId: number, newQty: number, maxStock: number) => {
         if (newQty < 1) return;
@@ -106,7 +128,8 @@ const Cart = () => {
     }, 0);
 
     const shipping = subtotal > 5000 ? 0 : 250; // Example logic
-    const total = subtotal + shipping;
+    const discount = Number(promoPreview?.discount_amount || 0);
+    const total = subtotal - discount + shipping;
 
     const formatPrice = (p: number) => {
         return new Intl.NumberFormat('en-PK', {
@@ -114,6 +137,36 @@ const Cart = () => {
             currency: 'PKR',
             minimumFractionDigits: 0,
         }).format(p);
+    };
+
+    const handleApplyPromo = async () => {
+        if (!promoCode.trim()) {
+            toast.error("Enter a promo code");
+            return;
+        }
+        try {
+            setApplyingPromo(true);
+            const preview = await previewPromotion({
+                promo_code: promoCode.trim().toUpperCase(),
+                items: user ? undefined : items.map((item) => ({ product_id: item.product.id, quantity: item.quantity })),
+            });
+            setPromoPreview(preview);
+            setPromoCode(preview.code);
+            setAppliedPromoCode(preview.code);
+            toast.success("Promo code applied");
+        } catch (error: any) {
+            setPromoPreview(null);
+            clearAppliedPromoCode();
+            toast.error(error?.response?.data?.error || "Failed to apply promo code");
+        } finally {
+            setApplyingPromo(false);
+        }
+    };
+
+    const handleRemovePromo = () => {
+        setPromoPreview(null);
+        setPromoCode("");
+        clearAppliedPromoCode();
     };
 
     if (loading) {
@@ -218,6 +271,30 @@ const Cart = () => {
                                 <span>Subtotal</span>
                                 <span className="text-foreground font-medium">{formatPrice(subtotal)}</span>
                             </div>
+                            {hasActiveDeals && (
+                                <div className="space-y-3 rounded-xl border border-border p-4">
+                                    <div className="flex gap-2">
+                                        <Input value={promoCode} onChange={(e) => setPromoCode(e.target.value.toUpperCase())} placeholder="Promo code" />
+                                        <Button type="button" onClick={handleApplyPromo} disabled={applyingPromo}>
+                                            {applyingPromo ? "Applying..." : "Apply"}
+                                        </Button>
+                                    </div>
+                                    {promoPreview && (
+                                        <div className="flex items-center justify-between text-sm">
+                                            <span className="text-green-400">{promoPreview.code} applied</span>
+                                            <button type="button" onClick={handleRemovePromo} className="text-muted-foreground hover:text-white">
+                                                Remove
+                                            </button>
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+                            {discount > 0 && (
+                                <div className="flex justify-between text-green-400">
+                                    <span>Discount</span>
+                                    <span>-{formatPrice(discount)}</span>
+                                </div>
+                            )}
                             <div className="flex justify-between text-muted-foreground">
                                 <span>Shipping</span>
                                 <span className="text-foreground font-medium">{shipping === 0 ? "Free" : formatPrice(shipping)}</span>

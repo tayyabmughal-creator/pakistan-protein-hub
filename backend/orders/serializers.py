@@ -1,5 +1,6 @@
 from rest_framework import serializers
 from products.models import Product
+from promotions.models import Promotion
 from .models import Order, OrderItem
 
 class OrderItemSerializer(serializers.ModelSerializer):
@@ -24,7 +25,7 @@ class OrderSerializer(serializers.ModelSerializer):
         model = Order
         fields = [
             'id', 'user', 'guest_name', 'guest_email', 'guest_phone_number',
-            'items', 'total_amount', 'shipping_address', 'payment_method',
+            'items', 'subtotal_amount', 'discount_amount', 'applied_promo_code', 'total_amount', 'shipping_address', 'payment_method',
             'payment_status', 'status', 'created_at'
         ]
         read_only_fields = ['user', 'total_amount']
@@ -37,6 +38,7 @@ class GuestOrderItemInputSerializer(serializers.Serializer):
 class CreateOrderSerializer(serializers.Serializer):
     address_id = serializers.IntegerField(required=False)
     payment_method = serializers.ChoiceField(choices=Order.PAYMENT_METHOD_CHOICES, default='COD')
+    promo_code = serializers.CharField(required=False, allow_blank=True)
     guest_name = serializers.CharField(required=False, allow_blank=False)
     guest_email = serializers.EmailField(required=False)
     guest_phone_number = serializers.CharField(required=False, allow_blank=False)
@@ -71,6 +73,22 @@ class GuestOrderLookupSerializer(serializers.Serializer):
             raise serializers.ValidationError("Provide either email or phone number.")
         return attrs
 
+
+class PromotionPreviewItemSerializer(serializers.Serializer):
+    product_id = serializers.PrimaryKeyRelatedField(queryset=Product.objects.filter(is_active=True), source='product')
+    quantity = serializers.IntegerField(min_value=1)
+
+
+class PromotionPreviewSerializer(serializers.Serializer):
+    promo_code = serializers.CharField(required=True, allow_blank=False)
+    items = PromotionPreviewItemSerializer(many=True, required=False)
+
+    def validate_promo_code(self, value):
+        code = value.strip().upper()
+        if not Promotion.objects.filter(code=code).exists():
+            raise serializers.ValidationError("Promotion code not found.")
+        return code
+
 class AdminOrderSerializer(serializers.ModelSerializer):
     items = OrderItemSerializer(many=True, read_only=True)
     # Status is writable here
@@ -79,7 +97,7 @@ class AdminOrderSerializer(serializers.ModelSerializer):
         model = Order
         fields = [
             'id', 'user', 'guest_name', 'guest_email', 'guest_phone_number',
-            'items', 'total_amount', 'shipping_address', 'payment_method',
+            'items', 'subtotal_amount', 'discount_amount', 'applied_promo_code', 'total_amount', 'shipping_address', 'payment_method',
             'payment_status', 'status', 'created_at'
         ]
         read_only_fields = ['user', 'total_amount', 'shipping_address', 'payment_method', 'items', 'created_at']

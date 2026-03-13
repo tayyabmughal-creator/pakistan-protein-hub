@@ -213,8 +213,8 @@ REST_FRAMEWORK = {
 }
 
 SPECTACULAR_SETTINGS = {
-    'TITLE': 'Pakistan Protein Hub API',
-    'DESCRIPTION': 'E-commerce API for Gym Supplements Store',
+    'TITLE': 'PakNutrition API',
+    'DESCRIPTION': 'E-commerce API for supplements and fitness nutrition store',
     'VERSION': '1.0.0',
     'SERVE_INCLUDE_SCHEMA': False,
     # OTHER SETTINGS

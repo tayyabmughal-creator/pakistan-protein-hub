@@ -1,21 +1,30 @@
 import { useEffect, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import AdminLayout from "@/components/admin/AdminLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
-import { fetchAdminHomePageSettings, updateAdminHomePageSettings } from "@/lib/api";
+import { Switch } from "@/components/ui/switch";
+import { fetchAdminHomePageSettings, fetchAdminPromotions, updateAdminHomePageSettings } from "@/lib/api";
 import { toast } from "sonner";
 
 const HomepageSettings = () => {
+  const queryClient = useQueryClient();
   const [form, setForm] = useState<any | null>(null);
+  const [promotions, setPromotions] = useState<any[]>([]);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     const loadSettings = async () => {
       try {
-        setForm(await fetchAdminHomePageSettings());
+        const [homepageSettings, adminPromotions] = await Promise.all([
+          fetchAdminHomePageSettings(),
+          fetchAdminPromotions(),
+        ]);
+        setForm(homepageSettings);
+        setPromotions(adminPromotions);
       } catch {
         toast.error("Failed to load homepage settings");
       }
@@ -36,17 +45,48 @@ const HomepageSettings = () => {
     setForm((prev: any) => ({ ...prev, [field]: value }));
   };
 
+  const normalizeUrl = (value: string) => {
+    const trimmed = value.trim();
+    if (!trimmed) return "";
+    if (/^https?:\/\//i.test(trimmed)) return trimmed;
+    return `https://${trimmed}`;
+  };
+
   const handleSave = async () => {
     try {
       setSaving(true);
-      await updateAdminHomePageSettings(form);
+      const payload = {
+        ...form,
+        facebook_url: normalizeUrl(form.facebook_url || ""),
+        instagram_url: normalizeUrl(form.instagram_url || ""),
+        tiktok_url: normalizeUrl(form.tiktok_url || ""),
+        youtube_url: normalizeUrl(form.youtube_url || ""),
+        featured_promotion_id: form.featured_promotion_id || null,
+      };
+      await updateAdminHomePageSettings(payload);
+      setForm(payload);
+      queryClient.invalidateQueries({ queryKey: ["homepage-settings"] });
       toast.success("Homepage settings saved");
-    } catch {
-      toast.error("Failed to save homepage settings");
+    } catch (error: any) {
+      const detail =
+        error?.response?.data?.featured_promotion_id?.[0] ||
+        error?.response?.data?.facebook_url?.[0] ||
+        error?.response?.data?.instagram_url?.[0] ||
+        error?.response?.data?.tiktok_url?.[0] ||
+        error?.response?.data?.youtube_url?.[0] ||
+        error?.response?.data?.detail ||
+        "Failed to save homepage settings";
+      toast.error(detail);
     } finally {
       setSaving(false);
     }
   };
+
+  const dealStatus = !form.deal_enabled
+    ? { label: "Hidden", classes: "bg-zinc-800 text-zinc-300 border-zinc-700" }
+    : new Date(form.featured_promotion?.valid_to || form.effective_deal_target_date || form.deal_target_date).getTime() > Date.now()
+      ? { label: "Live", classes: "bg-emerald-500/10 text-emerald-300 border-emerald-500/30" }
+      : { label: "Expired", classes: "bg-amber-500/10 text-amber-300 border-amber-500/30" };
 
   return (
     <AdminLayout title="Homepage">
@@ -98,20 +138,51 @@ const HomepageSettings = () => {
       <div className="mt-8 grid grid-cols-1 xl:grid-cols-2 gap-8">
         <Card className="bg-card-gradient border-border">
           <CardHeader>
-            <CardTitle className="font-heading">Deal Banner</CardTitle>
+            <div className="flex items-center justify-between gap-4">
+              <CardTitle className="font-heading">Deal Banner</CardTitle>
+              <span className={`rounded-full border px-3 py-1 text-xs font-semibold uppercase tracking-wider ${dealStatus.classes}`}>
+                {dealStatus.label}
+              </span>
+            </div>
           </CardHeader>
           <CardContent className="space-y-4">
+            <div className="flex items-center justify-between rounded-xl border border-border/60 px-4 py-3">
+              <div>
+                <p className="font-medium">Show sale on homepage</p>
+                <p className="text-sm text-muted-foreground">Turn this off to hide the sale section completely.</p>
+              </div>
+              <Switch checked={!!form.deal_enabled} onCheckedChange={(checked) => setForm((prev: any) => ({ ...prev, deal_enabled: checked }))} />
+            </div>
             <Input value={form.deal_badge} onChange={(e) => updateField("deal_badge", e.target.value)} placeholder="Deal badge" />
             <Input value={form.deal_title} onChange={(e) => updateField("deal_title", e.target.value)} placeholder="Deal title" />
             <Input value={form.deal_subtitle} onChange={(e) => updateField("deal_subtitle", e.target.value)} placeholder="Deal subtitle" />
-            <Input value={form.deal_code} onChange={(e) => updateField("deal_code", e.target.value)} placeholder="Coupon code" />
             <div className="space-y-2">
-              <Label>Target Date</Label>
-              <Input
-                type="datetime-local"
-                value={form.deal_target_date ? new Date(form.deal_target_date).toISOString().slice(0, 16) : ""}
-                onChange={(e) => updateField("deal_target_date", new Date(e.target.value).toISOString())}
-              />
+              <Label>Featured Promotion</Label>
+              <select
+                value={form.featured_promotion_id || ""}
+                onChange={(e) => {
+                  const value = e.target.value ? Number(e.target.value) : null;
+                  const selected = promotions.find((promotion) => promotion.id === value) || null;
+                  setForm((prev: any) => ({
+                    ...prev,
+                    featured_promotion_id: value,
+                    featured_promotion: selected,
+                    effective_deal_code: selected?.code || prev.deal_code,
+                    effective_deal_target_date: selected?.valid_to || prev.deal_target_date,
+                  }));
+                }}
+                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+              >
+                <option value="">Select a promotion</option>
+                {promotions.map((promotion) => (
+                  <option key={promotion.id} value={promotion.id}>
+                    {promotion.code} ({promotion.discount_percentage}% off)
+                  </option>
+                ))}
+              </select>
+              <p className="text-xs text-muted-foreground">
+                Link a real deal so the homepage banner and checkout pricing stay synced.
+              </p>
             </div>
           </CardContent>
         </Card>
@@ -124,6 +195,60 @@ const HomepageSettings = () => {
             <Input value={form.support_email || ""} onChange={(e) => updateField("support_email", e.target.value)} placeholder="Support email" />
             <Input value={form.support_phone || ""} onChange={(e) => updateField("support_phone", e.target.value)} placeholder="Support phone" />
             <Textarea value={form.announcement_text || ""} onChange={(e) => updateField("announcement_text", e.target.value)} placeholder="Announcement text" />
+          </CardContent>
+        </Card>
+      </div>
+
+      <div className="mt-8">
+        <Card className="bg-card-gradient border-border">
+          <CardHeader>
+            <CardTitle className="font-heading">Featured Deal Preview</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className={`rounded-2xl border p-6 ${!form.deal_enabled ? "border-zinc-700 bg-zinc-900/50" : new Date(form.featured_promotion?.valid_to || form.effective_deal_target_date || form.deal_target_date).getTime() > Date.now() ? "border-primary/30 bg-primary/10" : "border-amber-500/20 bg-amber-500/5"}`}>
+              <div className="mb-3 inline-flex rounded-full border px-3 py-1 text-xs font-semibold uppercase tracking-wider text-primary">
+                {!form.deal_enabled ? "Hidden on homepage" : new Date(form.featured_promotion?.valid_to || form.effective_deal_target_date || form.deal_target_date).getTime() > Date.now() ? "Live on homepage" : "Expired on homepage"}
+              </div>
+              <h3 className="mb-2 font-heading text-3xl font-bold text-white">{form.deal_title || "MEGA SALE"}</h3>
+              <p className="mb-4 text-gray-300">
+                {!form.deal_enabled
+                  ? "This campaign is saved but fully hidden from the homepage."
+                  : new Date(form.featured_promotion?.valid_to || form.effective_deal_target_date || form.deal_target_date).getTime() > Date.now()
+                    ? form.deal_subtitle || "Up to 50% OFF on all proteins"
+                    : "This campaign will stay visible in an ended state until you hide it or move the target date forward."}
+              </p>
+              {form.deal_enabled && new Date(form.featured_promotion?.valid_to || form.effective_deal_target_date || form.deal_target_date).getTime() > Date.now() && (
+                <p className="text-sm text-gray-400">
+                  Coupon code: <span className="rounded-lg bg-primary/20 px-3 py-1 font-mono font-bold text-primary">{form.featured_promotion?.code || form.effective_deal_code || form.deal_code || "POWER50"}</span>
+                </p>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      <div className="mt-8">
+        <Card className="bg-card-gradient border-border">
+          <CardHeader>
+            <CardTitle className="font-heading">Social Handles</CardTitle>
+          </CardHeader>
+          <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label>Facebook URL</Label>
+              <Input value={form.facebook_url || ""} onChange={(e) => updateField("facebook_url", e.target.value)} placeholder="https://facebook.com/paknutrition" />
+            </div>
+            <div className="space-y-2">
+              <Label>Instagram URL</Label>
+              <Input value={form.instagram_url || ""} onChange={(e) => updateField("instagram_url", e.target.value)} placeholder="https://instagram.com/paknutrition" />
+            </div>
+            <div className="space-y-2">
+              <Label>TikTok URL</Label>
+              <Input value={form.tiktok_url || ""} onChange={(e) => updateField("tiktok_url", e.target.value)} placeholder="https://tiktok.com/@paknutrition" />
+            </div>
+            <div className="space-y-2">
+              <Label>YouTube URL</Label>
+              <Input value={form.youtube_url || ""} onChange={(e) => updateField("youtube_url", e.target.value)} placeholder="https://youtube.com/@paknutrition" />
+            </div>
           </CardContent>
         </Card>
       </div>

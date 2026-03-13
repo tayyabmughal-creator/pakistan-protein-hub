@@ -1,6 +1,6 @@
 openapi: 3.0.3
 info:
-  title: Pakistan Protein Hub API
+  title: PakNutrition API
   version: 1.0.0
   description: E-commerce API for Gym Supplements Store
 paths:

@@ -2,7 +2,7 @@ const About = () => {
     return (
         <div className="min-h-screen bg-[#050505] py-20 text-white">
             <div className="container mx-auto px-4 max-w-4xl">
-                <h1 className="font-heading text-4xl md:text-5xl font-bold mb-8 text-primary">About PowerFuel</h1>
+                <h1 className="font-heading text-4xl md:text-5xl font-bold mb-8 text-primary">About PakNutrition</h1>
 
                 <div className="space-y-8 text-gray-300 leading-relaxed text-lg">
                     <p>
@@ -30,7 +30,7 @@ const About = () => {
                     <div>
                         <h2 className="text-2xl font-bold text-white mb-4">Our Story</h2>
                         <p>
-                            Founded in 2024, PowerFuel started with a simple observation: the lack of reliable, authentic supplement sources in the local market.
+                            Founded in 2024, PakNutrition started with a simple observation: the lack of reliable, authentic supplement sources in the local market.
                             What began as a small passion project has grown into a trusted brand serving thousands of athletes, bodybuilders, and fitness enthusiasts nationwide.
                         </p>
                     </div>

@@ -78,7 +78,7 @@ def send_order_confirmation_sms(order):
         return
 
     body = (
-        f"Pakistan Protein Hub: your order #{order.id} is confirmed. "
+        f"PakNutrition: your order #{order.id} is confirmed. "
         f"Total PKR {order.total_amount}. Track it with your reference number."
     )
 

@@ -4,6 +4,7 @@ from rest_framework.test import APITestCase
 
 from orders.models import Order, OrderItem
 from products.models import Category, Product
+from promotions.models import Promotion
 from .models import HomePageSettings
 
 
@@ -51,6 +52,16 @@ class StorefrontAdminApiTests(APITestCase):
             quantity=1,
             price="10000.00",
         )
+        self.promotion = Promotion.objects.create(
+            code="POWER50",
+            description="Featured homepage sale",
+            discount_percentage=50,
+            valid_from="2026-01-01T00:00:00Z",
+            valid_to="2026-12-31T00:00:00Z",
+            active=True,
+            usage_limit=100,
+            used_count=0,
+        )
         self.client.force_authenticate(user=self.admin)
 
     def test_admin_dashboard_endpoint_returns_expected_sections(self):
@@ -79,16 +90,25 @@ class StorefrontAdminApiTests(APITestCase):
                 "deal_title": "WHEY SALE",
                 "deal_subtitle": "Discounts live",
                 "deal_code": "WHEY10",
+                "deal_enabled": True,
                 "deal_target_date": "2026-12-31T00:00:00Z",
+                "featured_promotion_id": self.promotion.id,
                 "support_email": "support@example.com",
                 "support_phone": "03000000000",
                 "announcement_text": "Now live",
+                "facebook_url": "https://facebook.com/paknutrition",
+                "instagram_url": "https://instagram.com/paknutrition",
+                "tiktok_url": "https://tiktok.com/@paknutrition",
+                "youtube_url": "https://youtube.com/@paknutrition",
             },
             format="json",
         )
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(HomePageSettings.get_solo().hero_badge, "Trusted supplements")
+        self.assertEqual(HomePageSettings.get_solo().instagram_url, "https://instagram.com/paknutrition")
+        self.assertTrue(HomePageSettings.get_solo().deal_enabled)
+        self.assertEqual(HomePageSettings.get_solo().featured_promotion_id, self.promotion.id)
 
     def test_public_homepage_settings_endpoint_is_available(self):
         self.client.force_authenticate(user=None)
@@ -96,6 +116,9 @@ class StorefrontAdminApiTests(APITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertIn("hero_badge", response.data)
+        self.assertIn("facebook_url", response.data)
+        self.assertIn("deal_is_live", response.data)
+        self.assertIn("effective_deal_code", response.data)
 
     def test_admin_orders_report_downloads_csv(self):
         response = self.client.get("/api/admin/reports/orders/")

@@ -1,7 +1,7 @@
 from rest_framework import generics, permissions, status, views
 from rest_framework.response import Response
 from .models import Order
-from .serializers import OrderSerializer, CreateOrderSerializer, GuestOrderLookupSerializer
+from .serializers import OrderSerializer, CreateOrderSerializer, GuestOrderLookupSerializer, PromotionPreviewSerializer
 from users.models import Address
 from products.services import StockService
 from django.db import transaction
@@ -27,7 +27,7 @@ class OrderListCreateView(generics.ListCreateAPIView):
             if request.user.is_authenticated:
                 if not Address.objects.filter(id=data['address_id'], user=request.user).exists():
                     return Response({'error': 'Invalid address'}, status=status.HTTP_400_BAD_REQUEST)
-                order = OrderService.create_order(request.user, data['address_id'], data.get('payment_method', 'COD'))
+                order = OrderService.create_order(request.user, data['address_id'], data.get('payment_method', 'COD'), data.get('promo_code', ''))
             else:
                 order = OrderService.create_guest_order(
                     guest_name=data['guest_name'],
@@ -38,6 +38,7 @@ class OrderListCreateView(generics.ListCreateAPIView):
                     street=data['street'],
                     items=data['items'],
                     payment_method=data.get('payment_method', 'COD'),
+                    promo_code=data.get('promo_code', ''),
                 )
             serializer = self.get_serializer(order)
             return Response(serializer.data, status=status.HTTP_201_CREATED)
@@ -94,3 +95,23 @@ class GuestOrderLookupView(views.APIView):
             return Response({'error': 'Order details did not match'}, status=status.HTTP_404_NOT_FOUND)
 
         return Response(OrderSerializer(order).data)
+
+
+class PromotionPreviewView(views.APIView):
+    permission_classes = [permissions.AllowAny]
+
+    def post(self, request):
+        serializer = PromotionPreviewSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+
+        from .services import OrderService
+
+        try:
+            if request.user.is_authenticated:
+                preview = OrderService.preview_discount(user=request.user, promo_code=data["promo_code"])
+            else:
+                preview = OrderService.preview_discount(items=data.get("items"), promo_code=data["promo_code"])
+            return Response(preview)
+        except Exception as exc:
+            return Response({"error": str(exc)}, status=status.HTTP_400_BAD_REQUEST)

@@ -107,6 +107,11 @@ export const createOrder = async (data: { address_id: number; payment_method: st
     return response.data;
 };
 
+export const previewPromotion = async (data: { promo_code: string; items?: { product_id: number; quantity: number }[] }) => {
+    const response = await apiClient.post("/orders/promo-preview/", data);
+    return response.data;
+};
+
 export const createGuestOrder = async (data: {
     guest_name: string;
     guest_email: string;
@@ -115,6 +120,7 @@ export const createGuestOrder = async (data: {
     area: string;
     street: string;
     payment_method: string;
+    promo_code?: string;
     items: { product_id: number; quantity: number }[];
 }) => {
     const response = await apiClient.post("/orders/", data);
@@ -212,6 +218,26 @@ export const fetchAdminOrders = async () => {
 export const fetchAdminDashboard = async () => {
     const response = await apiClient.get("/admin/dashboard/");
     return response.data;
+};
+
+export const fetchAdminPromotions = async () => {
+    const response = await apiClient.get("/admin/promotions/");
+    return response.data;
+};
+
+export const createPromotion = async (data: any) => {
+    const response = await apiClient.post("/admin/promotions/", data);
+    return response.data;
+};
+
+export const updatePromotion = async (id: number, data: any) => {
+    const response = await apiClient.patch(`/admin/promotions/${id}/`, data);
+    return response.data;
+};
+
+export const deletePromotion = async (id: number) => {
+    await apiClient.delete(`/admin/promotions/${id}/`);
+    return id;
 };
 
 export const fetchAdminCatalogSummary = async () => {

@@ -7,11 +7,12 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { toast } from "sonner";
 import { useAuth } from "@/context/AuthContext";
 import apiClient from "@/lib/apiClient";
-import { Zap, Loader2, ArrowRight } from "lucide-react";
+import { Zap, Loader2 } from "lucide-react";
 
 const Login = () => {
     const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
+    const [errorMessage, setErrorMessage] = useState("");
     const [loading, setLoading] = useState(false);
     const navigate = useNavigate();
     const { login } = useAuth();
@@ -19,6 +20,7 @@ const Login = () => {
     const handleLogin = async (e: React.FormEvent) => {
         e.preventDefault();
         setLoading(true);
+        setErrorMessage("");
 
         try {
             const response = await apiClient.post("/users/login/", { email, password });
@@ -43,6 +45,7 @@ const Login = () => {
             }
         } catch (error: any) {
             const msg = error.response?.data?.detail || "Login failed. Please check your credentials.";
+            setErrorMessage("Incorrect email or password. Please try again.");
             toast.error(msg);
         } finally {
             setLoading(false);
@@ -57,11 +60,22 @@ const Login = () => {
                 <div className="absolute bottom-[-20%] right-[-10%] w-[50%] h-[50%] bg-primary/5 rounded-full blur-[100px]" />
             </div>
 
+            <div className="absolute top-6 left-6 z-10">
+                <Link to="/" className="flex items-center gap-3 group">
+                    <div className="w-12 h-12 bg-primary rounded-xl flex items-center justify-center shadow-lg shadow-primary/20 transition-transform group-hover:scale-105">
+                        <span className="font-heading font-bold text-primary-foreground text-2xl">P</span>
+                    </div>
+                    <div className="text-left">
+                        <div className="font-heading text-2xl font-bold text-white tracking-tight">
+                            Pak<span className="text-primary">Nutrition</span>
+                        </div>
+                        <div className="text-xs uppercase tracking-[0.3em] text-gray-500">Premium supplements</div>
+                    </div>
+                </Link>
+            </div>
+
             <Card className="w-full max-w-md bg-[#111] border-white/10 relative z-10 animate-fade-in">
                 <CardHeader className="space-y-4 text-center">
-                    <div className="w-12 h-12 bg-primary/10 rounded-xl flex items-center justify-center mx-auto mb-2 text-primary">
-                        <Zap className="w-6 h-6 fill-primary" />
-                    </div>
                     <CardTitle className="text-3xl font-heading font-bold text-white">Welcome Back</CardTitle>
                     <CardDescription className="text-gray-400 text-base">
                         Enter your credentials to access your account
@@ -69,6 +83,11 @@ const Login = () => {
                 </CardHeader>
                 <CardContent>
                     <form onSubmit={handleLogin} className="space-y-6">
+                        {errorMessage && (
+                            <div className="rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-200">
+                                {errorMessage}
+                            </div>
+                        )}
                         <div className="space-y-2">
                             <Label htmlFor="email" className="text-gray-300">Email</Label>
                             <Input
@@ -76,7 +95,10 @@ const Login = () => {
                                 type="email"
                                 placeholder="name@example.com"
                                 value={email}
-                                onChange={(e) => setEmail(e.target.value)}
+                                onChange={(e) => {
+                                    setEmail(e.target.value);
+                                    if (errorMessage) setErrorMessage("");
+                                }}
                                 required
                                 className="bg-black/20 border-white/10 focus:border-primary text-white h-12"
                             />
@@ -88,7 +110,10 @@ const Login = () => {
                                 type="password"
                                 placeholder="••••••••"
                                 value={password}
-                                onChange={(e) => setPassword(e.target.value)}
+                                onChange={(e) => {
+                                    setPassword(e.target.value);
+                                    if (errorMessage) setErrorMessage("");
+                                }}
                                 required
                                 className="bg-black/20 border-white/10 focus:border-primary text-white h-12"
                             />
