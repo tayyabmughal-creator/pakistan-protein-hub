@@ -112,6 +112,11 @@ const ProductList = () => {
                             >
                                 {/* Image Section - Left */}
                                 <div className="w-full md:w-48 h-48 flex-shrink-0 bg-black/20 rounded-xl p-4 overflow-hidden relative">
+                                    {product.should_show_sale_badge && (
+                                        <div className="absolute left-3 top-3 z-10 rounded-full bg-primary px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-black">
+                                            {product.sale_percentage}% Off
+                                        </div>
+                                    )}
                                     <img
                                         src={getImageUrl(product.image) || "/placeholder.png"}
                                         alt={product.name}
@@ -135,6 +140,11 @@ const ProductList = () => {
                                             <span className="block font-heading text-2xl font-bold text-white tracking-wide">
                                                 {formatPrice(product.final_price || product.price)}
                                             </span>
+                                            {product.should_show_sale_badge && (
+                                                <span className="mt-1 block text-xs font-bold uppercase tracking-wider text-primary">
+                                                    Was {formatPrice(product.price)}
+                                                </span>
+                                            )}
                                             {product.stock > 0 ? (
                                                 <span className={`text-xs font-bold flex items-center justify-end gap-1 mt-1 ${product.stock > 5 ? "text-green-500" : "text-amber-400"}`}>
                                                     <span className={`w-1.5 h-1.5 rounded-full ${product.stock > 5 ? "bg-green-500" : "bg-amber-400"} animate-pulse`}></span>

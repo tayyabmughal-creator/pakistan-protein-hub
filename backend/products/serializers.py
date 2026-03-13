@@ -17,11 +17,14 @@ class ProductSerializer(serializers.ModelSerializer):
     )
     final_price = serializers.DecimalField(max_digits=10, decimal_places=2, read_only=True)
     is_in_stock = serializers.BooleanField(read_only=True)
+    sale_percentage = serializers.IntegerField(read_only=True)
+    should_show_sale_badge = serializers.BooleanField(read_only=True)
 
     class Meta:
         model = Product
         fields = [
             'id', 'name', 'slug', 'category', 'category_id', 'brand', 
             'weight', 'description', 'price', 'discount_price', 'final_price',
+            'show_sale_badge', 'sale_percentage', 'should_show_sale_badge',
             'stock', 'image', 'is_in_stock', 'is_active', 'created_at', 'updated_at'
         ]

@@ -18,6 +18,9 @@ interface Product {
     price: string;
     discount_price?: string | null;
     final_price?: string;
+    show_sale_badge?: boolean;
+    sale_percentage?: number;
+    should_show_sale_badge?: boolean;
     stock: number;
     image: string | null;
     category: number;
@@ -159,6 +162,7 @@ const ProductDetails = () => {
 
     const hasDiscount = product.discount_price || (product.final_price && Number(product.final_price) < Number(product.price));
     const displayPrice = product.final_price || product.discount_price || product.price;
+    const showSaleBadge = Boolean(product.should_show_sale_badge);
     const averageRating = reviews.length
         ? reviews.reduce((sum, review) => sum + review.rating, 0) / reviews.length
         : 0;
@@ -175,9 +179,9 @@ const ProductDetails = () => {
                                 alt={product.name}
                                 className="w-full h-full object-contain p-8 group-hover:scale-105 transition-transform duration-500"
                             />
-                            {hasDiscount && (
+                            {showSaleBadge && (
                                 <div className="absolute top-4 left-4 bg-white text-black font-bold px-3 py-1 rounded text-sm uppercase tracking-wider">
-                                    Sale
+                                    {product.sale_percentage}% Off
                                 </div>
                             )}
                         </div>

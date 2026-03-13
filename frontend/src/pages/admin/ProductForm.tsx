@@ -27,6 +27,7 @@ const ProductForm = () => {
         category_id: "",
         price: "",
         discount_price: "",
+        show_sale_badge: true,
         stock: "0",
         weight: "",
         description: "",
@@ -51,6 +52,7 @@ const ProductForm = () => {
                             category_id: product.category?.id?.toString() || "",
                             price: product.price,
                             discount_price: product.discount_price || "",
+                            show_sale_badge: Boolean(product.show_sale_badge ?? true),
                             stock: product.stock.toString(),
                             weight: product.weight,
                             description: product.description,
@@ -145,6 +147,19 @@ const ProductForm = () => {
                                     <Label htmlFor="weight">Weight (e.g. 2kg)</Label>
                                     <Input id="weight" value={formData.weight} onChange={handleInputChange} required />
                                 </div>
+                            </div>
+                            <div className="flex items-center justify-between rounded-xl border border-border/60 bg-background/40 px-4 py-3">
+                                <div>
+                                    <Label htmlFor="show_sale_badge" className="text-sm font-medium">Show Sale Sticker</Label>
+                                    <p className="text-xs text-muted-foreground mt-1">
+                                        Displays a sale badge on storefront cards when a valid discount price exists.
+                                    </p>
+                                </div>
+                                <Switch
+                                    id="show_sale_badge"
+                                    checked={formData.show_sale_badge}
+                                    onCheckedChange={(checked) => setFormData({ ...formData, show_sale_badge: checked })}
+                                />
                             </div>
                             <div className="space-y-2">
                                 <Label>Category</Label>

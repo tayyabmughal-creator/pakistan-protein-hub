@@ -10,6 +10,8 @@ interface ProductCardProps {
   price: number;
   discount_price?: number | null;
   final_price?: number;
+  sale_percentage?: number;
+  should_show_sale_badge?: boolean;
   image: string | null;
   badge?: string;
   slug: string;
@@ -17,7 +19,7 @@ interface ProductCardProps {
   onAddToCart?: (id: number) => Promise<void>;
 }
 
-const ProductCard = ({ id, name, brand, price, discount_price, final_price, image, badge, slug, stock = 0, onAddToCart }: ProductCardProps) => {
+const ProductCard = ({ id, name, brand, price, discount_price, final_price, sale_percentage = 0, should_show_sale_badge = false, image, badge, slug, stock = 0, onAddToCart }: ProductCardProps) => {
   const [loading, setLoading] = useState(false);
   const displayPrice = final_price || discount_price || price;
   const originalPrice = (discount_price || final_price) ? price : undefined;
@@ -51,9 +53,9 @@ const ProductCard = ({ id, name, brand, price, discount_price, final_price, imag
               {badge}
             </span>
           )}
-          {discount_price && (
+          {should_show_sale_badge && (
             <span className="bg-white text-black text-[10px] font-bold px-2 py-1 rounded uppercase tracking-wider">
-              Sale
+              {sale_percentage}% Off
             </span>
           )}
         </div>

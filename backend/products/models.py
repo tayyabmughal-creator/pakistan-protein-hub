@@ -21,6 +21,7 @@ class Product(models.Model):
     description = models.TextField()
     price = models.DecimalField(max_digits=10, decimal_places=2)
     discount_price = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    show_sale_badge = models.BooleanField(default=True)
     stock = models.PositiveIntegerField(default=0)
     image = models.ImageField(upload_to='products/', null=True, blank=True)
     is_active = models.BooleanField(default=True)
@@ -40,6 +41,16 @@ class Product(models.Model):
     @property
     def final_price(self):
         return self.discount_price if self.discount_price else self.price
+
+    @property
+    def sale_percentage(self):
+        if not self.discount_price or self.discount_price >= self.price:
+            return 0
+        return int(((self.price - self.discount_price) / self.price) * 100)
+
+    @property
+    def should_show_sale_badge(self):
+        return bool(self.show_sale_badge and self.sale_percentage > 0)
 
     @property
     def is_in_stock(self) -> bool:
