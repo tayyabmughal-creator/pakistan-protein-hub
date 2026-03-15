@@ -4,8 +4,10 @@ import { fetchOrderById, cancelOrder, getImageUrl } from "@/lib/api";
 import Loader from "@/components/Loader";
 import PageHeader from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { AlertCircle, CheckCircle, Package, Truck, XCircle } from "lucide-react";
+import { getOrderProgressIndex, getOrderStatusMeta, ORDER_FLOW } from "@/lib/orderStatus";
 
 const OrderDetails = () => {
     const { id } = useParams<{ id: string }>();
@@ -58,13 +60,10 @@ const OrderDetails = () => {
 
     // Simple logic to determine active step index.
     // If order is cancelled, show special state.
-    const getStepIndex = (status: string) => {
-        const orderStatuses = ["PENDING", "CONFIRMED", "SHIPPED", "DELIVERED"];
-        return orderStatuses.indexOf(status);
-    };
-
-    const currentStep = getStepIndex(order.status);
+    const currentStep = getOrderProgressIndex(order.status);
     const isCancelled = order.status === "CANCELLED";
+    const statusMeta = getOrderStatusMeta(order.status);
+    const shippingLines = order.shipping_address ? String(order.shipping_address).split("\n").filter(Boolean) : [];
 
     return (
         <div className="container mx-auto px-4 py-8">
@@ -74,14 +73,34 @@ const OrderDetails = () => {
                 <div className="lg:col-span-2 space-y-8">
                     {/* Status Timeline */}
                     <div className="bg-card border border-border rounded-xl p-6">
-                        <h3 className="font-heading font-bold text-lg mb-6">Order Status</h3>
+                        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                            <div>
+                                <h3 className="font-heading font-bold text-lg">Order Status</h3>
+                                <p className="mt-2 text-sm text-muted-foreground">{statusMeta.helper}</p>
+                            </div>
+                            <div className="flex flex-wrap items-center gap-2">
+                                <Badge className={statusMeta.badgeClass}>{statusMeta.shortLabel}</Badge>
+                                <span className="text-xs text-muted-foreground">
+                                    Updated {new Date(order.updated_at || order.created_at).toLocaleString()}
+                                </span>
+                            </div>
+                        </div>
+                        <div className="my-6 h-px bg-border" />
                         {isCancelled ? (
-                            <div className="flex items-center gap-3 text-destructive bg-destructive/10 p-4 rounded-lg">
+                            <div className="flex items-start gap-3 text-destructive bg-destructive/10 p-4 rounded-lg">
                                 <XCircle className="w-6 h-6" />
-                                <span className="font-bold">This order has been cancelled.</span>
+                                <div>
+                                    <p className="font-bold">This order has been cancelled.</p>
+                                    <p className="mt-1 text-sm text-muted-foreground">{statusMeta.helper}</p>
+                                </div>
                             </div>
                         ) : (
-                            <div className="relative">
+                            <div className="space-y-6">
+                                <div className="flex items-center justify-between text-xs uppercase tracking-wider text-muted-foreground">
+                                    <span>Current Progress</span>
+                                    <span>Step {currentStep + 1} of {ORDER_FLOW.length}</span>
+                                </div>
+                                <div className="relative">
                                 {/* Timeline Background */}
                                 <div className="absolute top-1/2 left-0 w-full h-1 bg-secondary -z-10 -translate-y-1/2 rounded-full" />
                                 {/* Timeline Progress */}
@@ -106,6 +125,19 @@ const OrderDetails = () => {
                                             </div>
                                         );
                                     })}
+                                </div>
+                            </div>
+                                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                                    <div className="rounded-xl border border-border/60 bg-background/40 p-4">
+                                        <p className="text-xs uppercase tracking-wider text-muted-foreground">What This Means</p>
+                                        <p className="mt-2 text-sm">{statusMeta.helper}</p>
+                                    </div>
+                                    <div className="rounded-xl border border-border/60 bg-background/40 p-4">
+                                        <p className="text-xs uppercase tracking-wider text-muted-foreground">Support</p>
+                                        <p className="mt-2 text-sm text-muted-foreground">
+                                            If this status looks incorrect or the parcel is delayed, contact support with your order number.
+                                        </p>
+                                    </div>
                                 </div>
                             </div>
                         )}
@@ -145,13 +177,18 @@ const OrderDetails = () => {
                         <h3 className="font-heading font-bold text-lg mb-4 flex items-center gap-2">
                             <Truck className="w-5 h-5 text-primary" /> Shipping Info
                         </h3>
-                        <div className="space-y-1">
-                            <p className="font-bold text-lg">{order.address?.full_name}</p>
-                            <p className="text-muted-foreground">{order.address?.street}</p>
-                            <p className="text-muted-foreground">{order.address?.area}, {order.address?.city}</p>
+                        <div className="space-y-2">
+                            <p className="font-bold text-lg">{order.customer_name || "Customer"}</p>
+                            {shippingLines.length ? (
+                                shippingLines.map((line: string, index: number) => (
+                                    <p key={`${line}-${index}`} className="text-muted-foreground">{line}</p>
+                                ))
+                            ) : (
+                                <p className="text-muted-foreground">No shipping address recorded.</p>
+                            )}
                             <p className="text-muted-foreground mt-2 flex items-center gap-2">
                                 <span className="bg-secondary px-2 py-0.5 rounded text-xs font-bold">Mobile</span>
-                                {order.address?.phone_number}
+                                {order.customer_phone_number || "N/A"}
                             </p>
                         </div>
                     </div>
@@ -171,6 +208,10 @@ const OrderDetails = () => {
                             <div className="flex justify-between text-muted-foreground">
                                 <span>Payment Method</span>
                                 <span className="text-foreground font-medium">{order.payment_method}</span>
+                            </div>
+                            <div className="flex justify-between text-muted-foreground">
+                                <span>Status</span>
+                                <span className="text-foreground font-medium">{statusMeta.shortLabel}</span>
                             </div>
                             <div className="h-px bg-border my-2" />
                             <div className="flex justify-between text-xl font-bold font-heading">

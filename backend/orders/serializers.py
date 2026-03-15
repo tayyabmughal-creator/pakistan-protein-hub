@@ -20,13 +20,41 @@ class OrderSerializer(serializers.ModelSerializer):
     status = serializers.CharField(read_only=True)
     payment_status = serializers.CharField(read_only=True)
     created_at = serializers.DateTimeField(read_only=True)
+    updated_at = serializers.DateTimeField(read_only=True)
+    customer_name = serializers.SerializerMethodField()
+    customer_email = serializers.SerializerMethodField()
+    customer_phone_number = serializers.SerializerMethodField()
+    customer_type = serializers.SerializerMethodField()
+    items_count = serializers.SerializerMethodField()
+
+    def get_customer_name(self, obj):
+        if obj.user_id:
+            return obj.user.name or obj.user.email
+        return obj.guest_name or "Guest"
+
+    def get_customer_email(self, obj):
+        if obj.user_id:
+            return obj.user.email
+        return obj.guest_email or ""
+
+    def get_customer_phone_number(self, obj):
+        if obj.user_id:
+            return obj.user.phone_number or ""
+        return obj.guest_phone_number or ""
+
+    def get_customer_type(self, obj):
+        return "Registered" if obj.user_id else "Guest"
+
+    def get_items_count(self, obj):
+        return sum(item.quantity for item in obj.items.all())
 
     class Meta:
         model = Order
         fields = [
             'id', 'user', 'guest_name', 'guest_email', 'guest_phone_number',
+            'customer_name', 'customer_email', 'customer_phone_number', 'customer_type', 'items_count',
             'items', 'subtotal_amount', 'discount_amount', 'applied_promo_code', 'total_amount', 'shipping_address', 'payment_method',
-            'payment_status', 'status', 'created_at'
+            'payment_status', 'status', 'created_at', 'updated_at'
         ]
         read_only_fields = ['user', 'total_amount']
 
@@ -91,13 +119,40 @@ class PromotionPreviewSerializer(serializers.Serializer):
 
 class AdminOrderSerializer(serializers.ModelSerializer):
     items = OrderItemSerializer(many=True, read_only=True)
+    customer_name = serializers.SerializerMethodField()
+    customer_email = serializers.SerializerMethodField()
+    customer_phone_number = serializers.SerializerMethodField()
+    customer_type = serializers.SerializerMethodField()
+    items_count = serializers.SerializerMethodField()
+
+    def get_customer_name(self, obj):
+        if obj.user_id:
+            return obj.user.name or obj.user.email
+        return obj.guest_name or "Guest"
+
+    def get_customer_email(self, obj):
+        if obj.user_id:
+            return obj.user.email
+        return obj.guest_email or ""
+
+    def get_customer_phone_number(self, obj):
+        if obj.user_id:
+            return obj.user.phone_number or ""
+        return obj.guest_phone_number or ""
+
+    def get_customer_type(self, obj):
+        return "Registered" if obj.user_id else "Guest"
+
+    def get_items_count(self, obj):
+        return sum(item.quantity for item in obj.items.all())
     # Status is writable here
     
     class Meta:
         model = Order
         fields = [
             'id', 'user', 'guest_name', 'guest_email', 'guest_phone_number',
+            'customer_name', 'customer_email', 'customer_phone_number', 'customer_type', 'items_count',
             'items', 'subtotal_amount', 'discount_amount', 'applied_promo_code', 'total_amount', 'shipping_address', 'payment_method',
-            'payment_status', 'status', 'created_at'
+            'payment_status', 'status', 'created_at', 'updated_at'
         ]
         read_only_fields = ['user', 'total_amount', 'shipping_address', 'payment_method', 'items', 'created_at']

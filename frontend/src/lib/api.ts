@@ -282,3 +282,13 @@ export const fetchAdminUsers = async () => {
     const response = await apiClient.get("/admin/users/");
     return response.data;
 };
+
+export const fetchAdminUserById = async (id: number) => {
+    const response = await apiClient.get(`/admin/users/${id}/`);
+    return response.data;
+};
+
+export const updateAdminUser = async (id: number, data: { name?: string; phone_number?: string; is_staff?: boolean; is_active?: boolean }) => {
+    const response = await apiClient.patch(`/admin/users/${id}/`, data);
+    return response.data;
+};

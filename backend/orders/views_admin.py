@@ -4,12 +4,12 @@ from .models import Order
 from .serializers import OrderSerializer, AdminOrderSerializer
 
 class AdminOrderListView(generics.ListAPIView):
-    queryset = Order.objects.all().order_by('-created_at')
+    queryset = Order.objects.select_related('user', 'promotion').prefetch_related('items__product').order_by('-created_at')
     serializer_class = OrderSerializer
     permission_classes = [permissions.IsAdminUser]
 
 class AdminOrderDetailView(generics.RetrieveUpdateAPIView):
-    queryset = Order.objects.all()
+    queryset = Order.objects.select_related('user', 'promotion').prefetch_related('items__product').all()
     serializer_class = AdminOrderSerializer
     permission_classes = [permissions.IsAdminUser]
 
