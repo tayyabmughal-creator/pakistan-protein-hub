@@ -90,7 +90,7 @@ const HomepageSettings = () => {
 
   return (
     <AdminLayout title="Homepage">
-      <div className="grid grid-cols-1 xl:grid-cols-2 gap-8">
+      <div className="grid grid-cols-1 gap-6 xl:grid-cols-2 xl:gap-8">
         <Card className="bg-card-gradient border-border">
           <CardHeader>
             <CardTitle className="font-heading">Hero Section</CardTitle>
@@ -135,10 +135,10 @@ const HomepageSettings = () => {
         </Card>
       </div>
 
-      <div className="mt-8 grid grid-cols-1 xl:grid-cols-2 gap-8">
+      <div className="mt-8 grid grid-cols-1 gap-6 xl:grid-cols-2 xl:gap-8">
         <Card className="bg-card-gradient border-border">
           <CardHeader>
-            <div className="flex items-center justify-between gap-4">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <CardTitle className="font-heading">Deal Banner</CardTitle>
               <span className={`rounded-full border px-3 py-1 text-xs font-semibold uppercase tracking-wider ${dealStatus.classes}`}>
                 {dealStatus.label}
@@ -146,7 +146,7 @@ const HomepageSettings = () => {
             </div>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="flex items-center justify-between rounded-xl border border-border/60 px-4 py-3">
+            <div className="flex flex-col gap-3 rounded-xl border border-border/60 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <p className="font-medium">Show sale on homepage</p>
                 <p className="text-sm text-muted-foreground">Turn this off to hide the sale section completely.</p>
@@ -205,11 +205,11 @@ const HomepageSettings = () => {
             <CardTitle className="font-heading">Featured Deal Preview</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className={`rounded-2xl border p-6 ${!form.deal_enabled ? "border-zinc-700 bg-zinc-900/50" : new Date(form.featured_promotion?.valid_to || form.effective_deal_target_date || form.deal_target_date).getTime() > Date.now() ? "border-primary/30 bg-primary/10" : "border-amber-500/20 bg-amber-500/5"}`}>
+            <div className={`rounded-2xl border p-5 sm:p-6 ${!form.deal_enabled ? "border-zinc-700 bg-zinc-900/50" : new Date(form.featured_promotion?.valid_to || form.effective_deal_target_date || form.deal_target_date).getTime() > Date.now() ? "border-primary/30 bg-primary/10" : "border-amber-500/20 bg-amber-500/5"}`}>
               <div className="mb-3 inline-flex rounded-full border px-3 py-1 text-xs font-semibold uppercase tracking-wider text-primary">
                 {!form.deal_enabled ? "Hidden on homepage" : new Date(form.featured_promotion?.valid_to || form.effective_deal_target_date || form.deal_target_date).getTime() > Date.now() ? "Live on homepage" : "Expired on homepage"}
               </div>
-              <h3 className="mb-2 font-heading text-3xl font-bold text-white">{form.deal_title || "MEGA SALE"}</h3>
+              <h3 className="mb-2 font-heading text-2xl font-bold text-white sm:text-3xl">{form.deal_title || "MEGA SALE"}</h3>
               <p className="mb-4 text-gray-300">
                 {!form.deal_enabled
                   ? "This campaign is saved but fully hidden from the homepage."
@@ -253,8 +253,8 @@ const HomepageSettings = () => {
         </Card>
       </div>
 
-      <div className="mt-8 flex justify-end">
-        <Button onClick={handleSave} disabled={saving} className="min-w-40">
+      <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:justify-end">
+        <Button onClick={handleSave} disabled={saving} className="w-full sm:w-auto sm:min-w-40">
           {saving ? "Saving..." : "Save Homepage"}
         </Button>
       </div>

@@ -43,13 +43,74 @@ const AdminProducts = () => {
 
     return (
         <AdminLayout title="Products">
-            <div className="flex justify-end mb-6">
+            <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-end">
                 <Button onClick={() => navigate("/admin/products/add")} className="gap-2 shadow-glow">
                     <Plus className="w-4 h-4" /> Add Product
                 </Button>
             </div>
 
-            <div className="bg-card-gradient border border-border rounded-xl overflow-hidden">
+            {loading ? (
+                <div className="rounded-xl border border-border bg-card-gradient px-4 py-10 text-center md:hidden">
+                    Loading products...
+                </div>
+            ) : products.length === 0 ? (
+                <div className="rounded-xl border border-border bg-card-gradient px-4 py-10 text-center md:hidden">
+                    No products found.
+                </div>
+            ) : (
+                <div className="space-y-4 md:hidden">
+                    {products.map((product, index) => (
+                        <div key={product.id} className="rounded-2xl border border-border bg-card-gradient p-4">
+                            <div className="flex items-start gap-3">
+                                <div className="h-16 w-16 shrink-0 overflow-hidden rounded-xl border border-border bg-secondary/50">
+                                    <img
+                                        src={getImageUrl(product.image) || "/placeholder.png"}
+                                        alt=""
+                                        className="h-full w-full object-cover"
+                                    />
+                                </div>
+                                <div className="min-w-0 flex-1">
+                                    <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Product #{index + 1}</p>
+                                    <p className="mt-1 font-semibold">{product.name}</p>
+                                    <p className="text-sm text-muted-foreground">{product.category?.name || "Uncategorized"}</p>
+                                </div>
+                            </div>
+                            <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
+                                <div className="rounded-xl border border-border/60 px-3 py-3">
+                                    <p className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">Price</p>
+                                    <p className="mt-1 font-semibold">Rs. {parseFloat(product.final_price).toLocaleString()}</p>
+                                </div>
+                                <div className="rounded-xl border border-border/60 px-3 py-3">
+                                    <p className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">Stock</p>
+                                    <p className={`mt-1 font-semibold ${product.stock > 0 ? "text-green-500" : "text-destructive"}`}>
+                                        {product.stock} units
+                                    </p>
+                                </div>
+                            </div>
+                            <div className="mt-4 flex gap-3">
+                                <Button
+                                    variant="outline"
+                                    className="flex-1 gap-2 rounded-xl"
+                                    onClick={() => navigate(`/admin/products/edit/${product.id}`)}
+                                >
+                                    <Edit className="w-4 h-4 text-primary" />
+                                    Edit
+                                </Button>
+                                <Button
+                                    variant="outline"
+                                    className="flex-1 gap-2 rounded-xl text-destructive hover:text-destructive"
+                                    onClick={() => handleDelete(product.id)}
+                                >
+                                    <Trash2 className="w-4 h-4" />
+                                    Delete
+                                </Button>
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            )}
+
+            <div className="hidden overflow-hidden rounded-xl border border-border bg-card-gradient md:block">
                 <Table>
                     <TableHeader>
                         <TableRow className="hover:bg-transparent border-border">

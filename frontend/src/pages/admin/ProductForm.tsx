@@ -117,7 +117,7 @@ const ProductForm = () => {
     return (
         <AdminLayout title={isEdit ? "Edit Product" : "Add New Product"}>
             <form onSubmit={handleSubmit} className="max-w-4xl space-y-8">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                <div className="grid grid-cols-1 gap-6 md:grid-cols-2 md:gap-8">
                     <Card className="bg-card-gradient border-border">
                         <CardContent className="pt-6 space-y-4">
                             <div className="space-y-2">
@@ -128,7 +128,7 @@ const ProductForm = () => {
                                 <Label htmlFor="brand">Brand</Label>
                                 <Input id="brand" value={formData.brand} onChange={handleInputChange} required />
                             </div>
-                            <div className="grid grid-cols-2 gap-4">
+                            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                                 <div className="space-y-2">
                                     <Label htmlFor="price">Price (PKR)</Label>
                                     <Input id="price" type="number" value={formData.price} onChange={handleInputChange} required />
@@ -138,7 +138,7 @@ const ProductForm = () => {
                                     <Input id="discount_price" type="number" value={formData.discount_price} onChange={handleInputChange} />
                                 </div>
                             </div>
-                            <div className="grid grid-cols-2 gap-4">
+                            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                                 <div className="space-y-2">
                                     <Label htmlFor="stock">Stock Quantity</Label>
                                     <Input id="stock" type="number" value={formData.stock} onChange={handleInputChange} required />
@@ -148,7 +148,7 @@ const ProductForm = () => {
                                     <Input id="weight" value={formData.weight} onChange={handleInputChange} required />
                                 </div>
                             </div>
-                            <div className="flex items-center justify-between rounded-xl border border-border/60 bg-background/40 px-4 py-3">
+                            <div className="flex flex-col gap-3 rounded-xl border border-border/60 bg-background/40 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
                                 <div>
                                     <Label htmlFor="show_sale_badge" className="text-sm font-medium">Show Sale Sticker</Label>
                                     <p className="text-xs text-muted-foreground mt-1">
@@ -177,7 +177,7 @@ const ProductForm = () => {
                                     </SelectContent>
                                 </Select>
                             </div>
-                            <div className="flex items-center justify-between rounded-xl border border-border/60 bg-background/40 px-4 py-3">
+                            <div className="flex flex-col gap-3 rounded-xl border border-border/60 bg-background/40 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
                                 <div>
                                     <Label htmlFor="is_active" className="text-sm font-medium">Visible on Storefront</Label>
                                     <p className="text-xs text-muted-foreground mt-1">
@@ -231,11 +231,11 @@ const ProductForm = () => {
                     </Card>
                 </div>
 
-                <div className="flex gap-4">
-                    <Button type="submit" size="lg" className="px-10 shadow-glow" disabled={loading}>
+                <div className="flex flex-col gap-3 sm:flex-row">
+                    <Button type="submit" size="lg" className="w-full px-10 shadow-glow sm:w-auto" disabled={loading}>
                         {loading ? "Saving..." : isEdit ? "Update Product" : "Create Product"}
                     </Button>
-                    <Button type="button" variant="outline" size="lg" onClick={() => navigate("/admin/products")}>
+                    <Button type="button" variant="outline" size="lg" className="w-full sm:w-auto" onClick={() => navigate("/admin/products")}>
                         Cancel
                     </Button>
                 </div>

@@ -105,13 +105,62 @@ const AdminCategories = () => {
 
     return (
         <AdminLayout title="Categories">
-            <div className="flex justify-end mb-6">
+            <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-end">
                 <Button onClick={() => handleOpenDialog()} className="gap-2 shadow-glow">
                     <Plus className="w-4 h-4" /> Add Category
                 </Button>
             </div>
 
-            <div className="bg-card-gradient border border-border rounded-xl overflow-hidden">
+            {loading ? (
+                <div className="rounded-xl border border-border bg-card-gradient px-4 py-10 text-center md:hidden">
+                    Loading categories...
+                </div>
+            ) : categories.length === 0 ? (
+                <div className="rounded-xl border border-border bg-card-gradient px-4 py-10 text-center md:hidden">
+                    No categories found.
+                </div>
+            ) : (
+                <div className="space-y-4 md:hidden">
+                    {categories.map((cat, index) => (
+                        <div key={cat.id} className="rounded-2xl border border-border bg-card-gradient p-4">
+                            <div className="flex items-start gap-3">
+                                <div className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-border bg-secondary/50">
+                                    {cat.image ? (
+                                        <img
+                                            src={getImageUrl(cat.image) || undefined}
+                                            alt={cat.name}
+                                            className="h-full w-full object-cover"
+                                        />
+                                    ) : (
+                                        <span className="text-xs text-muted-foreground">No Img</span>
+                                    )}
+                                </div>
+                                <div className="min-w-0 flex-1">
+                                    <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Category #{index + 1}</p>
+                                    <p className="mt-1 font-semibold">{cat.name}</p>
+                                    <p className="text-sm text-muted-foreground break-all">{cat.slug}</p>
+                                </div>
+                            </div>
+                            <div className="mt-4 flex gap-3">
+                                <Button variant="outline" className="flex-1 gap-2 rounded-xl" onClick={() => handleOpenDialog(cat)}>
+                                    <Pencil className="w-4 h-4 text-primary" />
+                                    Edit
+                                </Button>
+                                <Button
+                                    variant="outline"
+                                    className="flex-1 gap-2 rounded-xl text-destructive hover:text-destructive"
+                                    onClick={() => handleDelete(cat.id)}
+                                >
+                                    <Trash2 className="w-4 h-4" />
+                                    Delete
+                                </Button>
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            )}
+
+            <div className="hidden overflow-hidden rounded-xl border border-border bg-card-gradient md:block">
                 <Table>
                     <TableHeader>
                         <TableRow className="hover:bg-transparent border-border">
@@ -164,7 +213,7 @@ const AdminCategories = () => {
             </div>
 
             <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-                <DialogContent className="sm:max-w-[425px] bg-card border-border">
+                <DialogContent className="w-[calc(100vw-1rem)] bg-card border-border sm:max-w-[425px]">
                     <DialogHeader>
                         <DialogTitle>{editingCategory ? "Edit Category" : "Add New Category"}</DialogTitle>
                     </DialogHeader>
@@ -195,7 +244,7 @@ const AdminCategories = () => {
                                 </p>
                             )}
                         </div>
-                        <DialogFooter>
+                        <DialogFooter className="gap-2">
                             <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>Cancel</Button>
                             <Button type="submit" disabled={saving}>{saving ? "Saving..." : "Save Category"}</Button>
                         </DialogFooter>

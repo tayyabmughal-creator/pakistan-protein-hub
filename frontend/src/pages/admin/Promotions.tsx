@@ -122,13 +122,75 @@ const Promotions = () => {
 
   return (
     <AdminLayout title="Deals">
-      <div className="mb-6 flex justify-end">
+      <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-end">
         <Button onClick={() => openDialog()} className="gap-2 shadow-glow">
           <Plus className="w-4 h-4" /> Add Deal
         </Button>
       </div>
 
-      <div className="rounded-xl border border-border bg-card-gradient overflow-hidden">
+      {loading ? (
+        <div className="rounded-xl border border-border bg-card-gradient px-4 py-10 text-center md:hidden">
+          Loading deals...
+        </div>
+      ) : promotions.length === 0 ? (
+        <div className="rounded-xl border border-border bg-card-gradient px-4 py-10 text-center md:hidden">
+          No deals found.
+        </div>
+      ) : (
+        <div className="space-y-4 md:hidden">
+          {promotions.map((promotion) => (
+            <div key={promotion.id} className="rounded-2xl border border-border bg-card-gradient p-4">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="font-semibold">{promotion.code}</p>
+                  <p className="mt-1 text-sm text-muted-foreground">{promotion.description || "No description"}</p>
+                </div>
+                <span className={`shrink-0 rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-wider ${
+                  promotion.is_valid
+                    ? "bg-emerald-500/10 text-emerald-300"
+                    : promotion.active
+                      ? "bg-amber-500/10 text-amber-300"
+                      : "bg-zinc-800 text-zinc-300"
+                }`}>
+                  {promotion.is_valid ? "Live" : promotion.active ? "Inactive Window" : "Disabled"}
+                </span>
+              </div>
+              <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
+                <div className="rounded-xl border border-border/60 px-3 py-3">
+                  <p className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">Discount</p>
+                  <p className="mt-1 font-semibold">{promotion.discount_percentage}% OFF</p>
+                </div>
+                <div className="rounded-xl border border-border/60 px-3 py-3">
+                  <p className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">Usage</p>
+                  <p className="mt-1 font-semibold">{promotion.used_count}/{promotion.usage_limit}</p>
+                </div>
+                <div className="col-span-2 rounded-xl border border-border/60 px-3 py-3">
+                  <p className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">Validity</p>
+                  <p className="mt-1 font-semibold">
+                    {new Date(promotion.valid_from).toLocaleDateString()} to {new Date(promotion.valid_to).toLocaleDateString()}
+                  </p>
+                </div>
+              </div>
+              <div className="mt-4 flex gap-3">
+                <Button variant="outline" className="flex-1 gap-2 rounded-xl" onClick={() => openDialog(promotion)}>
+                  <Pencil className="h-4 w-4 text-primary" />
+                  Edit
+                </Button>
+                <Button
+                  variant="outline"
+                  className="flex-1 gap-2 rounded-xl text-destructive hover:text-destructive"
+                  onClick={() => handleDelete(promotion.id)}
+                >
+                  <Trash2 className="h-4 w-4" />
+                  Delete
+                </Button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <div className="hidden overflow-hidden rounded-xl border border-border bg-card-gradient md:block">
         <Table>
           <TableHeader>
             <TableRow className="border-border hover:bg-transparent">
@@ -186,7 +248,7 @@ const Promotions = () => {
       </div>
 
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-        <DialogContent className="sm:max-w-[640px] bg-card border-border">
+        <DialogContent className="w-[calc(100vw-1rem)] bg-card border-border sm:max-w-[640px]">
           <DialogHeader>
             <DialogTitle>{editingPromotion ? "Edit Deal" : "Add Deal"}</DialogTitle>
           </DialogHeader>
@@ -225,14 +287,14 @@ const Promotions = () => {
                 <Input type="number" min="0" value={form.used_count} onChange={(e) => setForm((prev: any) => ({ ...prev, used_count: e.target.value }))} required />
               </div>
             </div>
-            <div className="flex items-center justify-between rounded-xl border border-border/60 px-4 py-3">
+            <div className="flex flex-col gap-3 rounded-xl border border-border/60 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <p className="font-medium">Active</p>
                 <p className="text-sm text-muted-foreground">Inactive deals stay saved but are hidden from customers.</p>
               </div>
               <Switch checked={!!form.active} onCheckedChange={(checked) => setForm((prev: any) => ({ ...prev, active: checked }))} />
             </div>
-            <DialogFooter>
+            <DialogFooter className="gap-2">
               <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>Cancel</Button>
               <Button type="submit" disabled={saving}>{saving ? "Saving..." : "Save Deal"}</Button>
             </DialogFooter>

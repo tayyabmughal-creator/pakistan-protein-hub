@@ -382,7 +382,76 @@ const AdminOrders = () => {
                 </div>
             </div>
 
-            <div className="bg-card-gradient border border-border rounded-xl overflow-hidden">
+            {loading ? (
+                <div className="rounded-xl border border-border bg-card-gradient px-4 py-10 text-center md:hidden">
+                    Loading orders...
+                </div>
+            ) : filteredOrders.length === 0 ? (
+                <div className="rounded-xl border border-border bg-card-gradient px-4 py-10 text-center md:hidden">
+                    No orders found.
+                </div>
+            ) : (
+                <div className="space-y-4 md:hidden">
+                    {filteredOrders.map((order) => (
+                        <div key={order.id} className="rounded-2xl border border-border bg-card-gradient p-4">
+                            <div className="flex items-start justify-between gap-3">
+                                <div className="min-w-0">
+                                    <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Order #{order.id}</p>
+                                    <p className="mt-1 font-semibold">{order.customer_name || `User #${order.user}`}</p>
+                                    <p className="text-sm text-muted-foreground break-all">{order.customer_email || "No email"}</p>
+                                    <p className="mt-1 text-[11px] uppercase tracking-wider text-primary">{order.customer_type}</p>
+                                </div>
+                                <Badge className={getOrderStatusMeta(order.status).badgeClass}>
+                                    {getOrderStatusMeta(order.status).shortLabel}
+                                </Badge>
+                            </div>
+
+                            <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
+                                <div className="rounded-xl border border-border/60 px-3 py-3">
+                                    <p className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">Items</p>
+                                    <p className="mt-1 font-semibold">{order.items_count || 0} item(s)</p>
+                                    <p className="mt-1 text-xs text-muted-foreground">
+                                        {order.items?.[0]?.product_name || "No line items"}
+                                        {order.items?.length > 1 ? ` +${order.items.length - 1} more` : ""}
+                                    </p>
+                                </div>
+                                <div className="rounded-xl border border-border/60 px-3 py-3">
+                                    <p className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">Total</p>
+                                    <p className="mt-1 font-semibold">{formatMoney(order.total_amount)}</p>
+                                </div>
+                                <div className="rounded-xl border border-border/60 px-3 py-3">
+                                    <p className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">Created</p>
+                                    <p className="mt-1 font-semibold">{new Date(order.created_at).toLocaleDateString()}</p>
+                                </div>
+                                <div className="rounded-xl border border-border/60 px-3 py-3">
+                                    <p className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">Updated</p>
+                                    <p className="mt-1 font-semibold">{new Date(order.updated_at || order.created_at).toLocaleDateString()}</p>
+                                </div>
+                            </div>
+
+                            <div className="mt-4 space-y-3">
+                                <Select value={order.status} onValueChange={(val) => handleStatusSelect(order, val)}>
+                                    <SelectTrigger className="h-10 w-full text-sm">
+                                        <SelectValue placeholder="Move status" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {getAllowedNextStatuses(order.status).map((status) => (
+                                            <SelectItem key={status} value={status}>
+                                                {getOrderStatusMeta(status).shortLabel}
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                                <Button variant="outline" className="w-full rounded-xl" onClick={() => setSelectedOrder(order)}>
+                                    View Details
+                                </Button>
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            )}
+
+            <div className="hidden overflow-hidden rounded-xl border border-border bg-card-gradient md:block">
                 <Table>
                     <TableHeader>
                         <TableRow className="hover:bg-transparent border-border">
@@ -460,11 +529,11 @@ const AdminOrders = () => {
             </div>
 
             <Dialog open={!!selectedOrder} onOpenChange={(open) => !open && setSelectedOrder(null)}>
-                <DialogContent className="max-w-5xl bg-card border-border">
+                <DialogContent className="w-[calc(100vw-1rem)] max-h-[90vh] overflow-y-auto border-border bg-card sm:max-w-5xl">
                     {selectedOrder && (
                         <>
                             <DialogHeader>
-                                <div className="flex items-start justify-between gap-4">
+                                <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                                     <div>
                                         <DialogTitle>Order #{selectedOrder.id}</DialogTitle>
                                         <DialogDescription>
@@ -479,7 +548,7 @@ const AdminOrders = () => {
                                             </span>
                                         </div>
                                     </div>
-                                    <Button type="button" variant="outline" onClick={() => handlePrintOrder(selectedOrder)}>
+                                    <Button type="button" variant="outline" className="gap-2 self-start sm:self-auto" onClick={() => handlePrintOrder(selectedOrder)}>
                                         <Printer className="h-4 w-4" />
                                         Print Slip
                                     </Button>
@@ -488,7 +557,7 @@ const AdminOrders = () => {
 
                             {selectedOrder.status !== "CANCELLED" ? (
                                 <div className="rounded-xl border border-border/60 bg-background/40 p-4 space-y-4">
-                                    <div className="flex items-center justify-between gap-3">
+                                    <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                                         <h3 className="font-semibold">Fulfillment Progress</h3>
                                         <span className="text-xs uppercase tracking-wider text-muted-foreground">
                                             Step {selectedOrderProgress + 1} of {ORDER_FLOW.length}
@@ -500,7 +569,7 @@ const AdminOrders = () => {
                                             style={{ width: `${((selectedOrderProgress + 1) / ORDER_FLOW.length) * 100}%` }}
                                         />
                                     </div>
-                                    <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+                                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
                                         {ORDER_FLOW.map((status, index) => (
                                             <div key={status} className="rounded-lg border border-border/50 px-3 py-2">
                                                 <p className={cn("text-sm", index <= selectedOrderProgress ? "font-semibold text-foreground" : "text-muted-foreground")}>
@@ -534,7 +603,11 @@ const AdminOrders = () => {
                                     <div className="space-y-1 text-sm">
                                         <p><span className="text-muted-foreground">Status:</span> {getOrderStatusMeta(selectedOrder.status).shortLabel}</p>
                                         <p><span className="text-muted-foreground">Payment:</span> {selectedOrder.payment_method}</p>
+                                        <p><span className="text-muted-foreground">Provider:</span> {selectedOrder.payment_provider || "N/A"}</p>
                                         <p><span className="text-muted-foreground">Payment Status:</span> {selectedOrder.payment_status}</p>
+                                        <p><span className="text-muted-foreground">Reference:</span> {selectedOrder.payment_reference || "N/A"}</p>
+                                        <p><span className="text-muted-foreground">Tracker:</span> {selectedOrder.payment_tracker || "N/A"}</p>
+                                        <p><span className="text-muted-foreground">Payment Note:</span> {selectedOrder.payment_note || "N/A"}</p>
                                         <p><span className="text-muted-foreground">Created:</span> {formatDate(selectedOrder.created_at)}</p>
                                         <p><span className="text-muted-foreground">Last Updated:</span> {formatDate(selectedOrder.updated_at || selectedOrder.created_at)}</p>
                                         <p><span className="text-muted-foreground">Promo Code:</span> {selectedOrder.applied_promo_code || "None"}</p>
@@ -559,45 +632,72 @@ const AdminOrders = () => {
 
                             <div className="rounded-xl border border-border/60 bg-background/40 p-4">
                                 <h3 className="font-semibold mb-4">Ordered Products</h3>
-                                <Table>
-                                    <TableHeader>
-                                        <TableRow className="border-border hover:bg-transparent">
-                                            <TableHead>Line</TableHead>
-                                            <TableHead>Product ID</TableHead>
-                                            <TableHead>Product</TableHead>
-                                            <TableHead>Unit Price</TableHead>
-                                            <TableHead>Qty</TableHead>
-                                            <TableHead className="text-right">Line Total</TableHead>
-                                        </TableRow>
-                                    </TableHeader>
-                                    <TableBody>
-                                        {selectedOrder.items?.length ? (
-                                            selectedOrder.items.map((item: any) => (
-                                                <TableRow key={item.id} className="border-border">
-                                                    <TableCell>#{item.id}</TableCell>
-                                                    <TableCell>{item.product || "Deleted"}</TableCell>
-                                                    <TableCell>
-                                                        <div className="space-y-1">
+                                {selectedOrder.items?.length ? (
+                                    <>
+                                        <div className="space-y-3 md:hidden">
+                                            {selectedOrder.items.map((item: any) => (
+                                                <div key={item.id} className="rounded-xl border border-border/50 p-3">
+                                                    <div className="flex items-start justify-between gap-3">
+                                                        <div className="min-w-0">
                                                             <p className="font-medium">{item.product_name}</p>
+                                                            <p className="mt-1 text-xs text-muted-foreground">Line #{item.id} · Product ID {item.product || "Deleted"}</p>
                                                             {item.product_image && (
-                                                                <p className="text-xs text-muted-foreground truncate">{item.product_image}</p>
+                                                                <p className="mt-1 truncate text-xs text-muted-foreground">{item.product_image}</p>
                                                             )}
                                                         </div>
-                                                    </TableCell>
-                                                    <TableCell>{formatMoney(item.price)}</TableCell>
-                                                    <TableCell>{item.quantity}</TableCell>
-                                                    <TableCell className="text-right">{formatMoney(Number(item.price) * Number(item.quantity))}</TableCell>
-                                                </TableRow>
-                                            ))
-                                        ) : (
-                                            <TableRow>
-                                                <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
-                                                    No ordered products found.
-                                                </TableCell>
-                                            </TableRow>
-                                        )}
-                                    </TableBody>
-                                </Table>
+                                                        <p className="shrink-0 font-semibold">{item.quantity}x</p>
+                                                    </div>
+                                                    <div className="mt-3 grid grid-cols-2 gap-3 text-sm">
+                                                        <div className="rounded-lg border border-border/40 px-3 py-2">
+                                                            <p className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">Unit Price</p>
+                                                            <p className="mt-1 font-semibold">{formatMoney(item.price)}</p>
+                                                        </div>
+                                                        <div className="rounded-lg border border-border/40 px-3 py-2">
+                                                            <p className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">Line Total</p>
+                                                            <p className="mt-1 font-semibold">{formatMoney(Number(item.price) * Number(item.quantity))}</p>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+
+                                        <div className="hidden md:block">
+                                            <Table>
+                                                <TableHeader>
+                                                    <TableRow className="border-border hover:bg-transparent">
+                                                        <TableHead>Line</TableHead>
+                                                        <TableHead>Product ID</TableHead>
+                                                        <TableHead>Product</TableHead>
+                                                        <TableHead>Unit Price</TableHead>
+                                                        <TableHead>Qty</TableHead>
+                                                        <TableHead className="text-right">Line Total</TableHead>
+                                                    </TableRow>
+                                                </TableHeader>
+                                                <TableBody>
+                                                    {selectedOrder.items.map((item: any) => (
+                                                        <TableRow key={item.id} className="border-border">
+                                                            <TableCell>#{item.id}</TableCell>
+                                                            <TableCell>{item.product || "Deleted"}</TableCell>
+                                                            <TableCell>
+                                                                <div className="space-y-1">
+                                                                    <p className="font-medium">{item.product_name}</p>
+                                                                    {item.product_image && (
+                                                                        <p className="text-xs text-muted-foreground truncate">{item.product_image}</p>
+                                                                    )}
+                                                                </div>
+                                                            </TableCell>
+                                                            <TableCell>{formatMoney(item.price)}</TableCell>
+                                                            <TableCell>{item.quantity}</TableCell>
+                                                            <TableCell className="text-right">{formatMoney(Number(item.price) * Number(item.quantity))}</TableCell>
+                                                        </TableRow>
+                                                    ))}
+                                                </TableBody>
+                                            </Table>
+                                        </div>
+                                    </>
+                                ) : (
+                                    <p className="py-2 text-center text-sm text-muted-foreground">No ordered products found.</p>
+                                )}
                             </div>
                         </>
                     )}
