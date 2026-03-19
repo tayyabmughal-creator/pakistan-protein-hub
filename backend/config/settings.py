@@ -221,7 +221,24 @@ SPECTACULAR_SETTINGS = {
 }
 
 FRONTEND_URL = os.environ.get('FRONTEND_URL', 'http://localhost:8080')
+BACKEND_PUBLIC_URL = os.environ.get('BACKEND_PUBLIC_URL', 'http://127.0.0.1:8000')
 ADMIN_URL = os.environ.get('ADMIN_URL', 'admin/')
+
+# Payments
+SAFEPAY_ENABLED = get_bool_env('SAFEPAY_ENABLED', False)
+SAFEPAY_ENV = os.environ.get('SAFEPAY_ENV', 'sandbox')
+SAFEPAY_API_KEY = os.environ.get('SAFEPAY_API_KEY', '')
+SAFEPAY_SHARED_SECRET = os.environ.get('SAFEPAY_SHARED_SECRET', '')
+SAFEPAY_SOURCE = os.environ.get('SAFEPAY_SOURCE', 'paknutrition')
+EASYPAISA_ACCOUNT = os.environ.get('EASYPAISA_ACCOUNT', '')
+JAZZCASH_ACCOUNT = os.environ.get('JAZZCASH_ACCOUNT', '')
+BANK_ACCOUNT_TITLE = os.environ.get('BANK_ACCOUNT_TITLE', '')
+BANK_ACCOUNT_NUMBER = os.environ.get('BANK_ACCOUNT_NUMBER', '')
+BANK_NAME = os.environ.get('BANK_NAME', '')
+MANUAL_PAYMENT_NOTE = os.environ.get(
+    'MANUAL_PAYMENT_NOTE',
+    'Complete the transfer first, then enter the transaction reference so PakNutrition can verify your payment quickly.',
+)
 
 # Email Configuration
 EMAIL_BACKEND = os.getenv('EMAIL_BACKEND', 'django.core.mail.backends.console.EmailBackend' if DEBUG else 'django.core.mail.backends.smtp.EmailBackend')

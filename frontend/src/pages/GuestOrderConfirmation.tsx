@@ -1,10 +1,19 @@
+import { useEffect } from "react";
 import { Link, useLocation, Navigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import PageHeader from "@/components/PageHeader";
+import { getGuestOrderConfirmation, saveGuestOrderConfirmation } from "@/lib/guestOrderSession";
 
 const GuestOrderConfirmation = () => {
     const location = useLocation();
-    const order = location.state?.order;
+    const orderFromState = (location.state as { order?: any } | null)?.order;
+    const order = orderFromState || getGuestOrderConfirmation();
+
+    useEffect(() => {
+        if (orderFromState) {
+            saveGuestOrderConfirmation(orderFromState);
+        }
+    }, [orderFromState]);
 
     if (!order) {
         return <Navigate to="/guest-orders" replace />;

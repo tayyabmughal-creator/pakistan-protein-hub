@@ -256,6 +256,7 @@ const AdminOrders = () => {
                                 <p><strong>Collect on Delivery:</strong> ${escapeHtml(codAmount)}</p>
                                 <p><strong>Stored Subtotal:</strong> ${escapeHtml(formatMoney(order.subtotal_amount))}</p>
                                 <p><strong>Discount:</strong> ${escapeHtml(formatMoney(order.discount_amount))}</p>
+                                <p><strong>Shipping Fee:</strong> ${escapeHtml(formatMoney(order.shipping_fee))}</p>
                                 <p><strong>Grand Total:</strong> ${escapeHtml(formatMoney(order.total_amount))}</p>
                                 <div class="pill-row">
                                     <span class="pill">Order #${escapeHtml(order.id)}</span>
@@ -285,6 +286,7 @@ const AdminOrders = () => {
                             <p><span>Items Subtotal</span><span>${escapeHtml(formatMoney(orderItemTotal))}</span></p>
                             <p><span>Stored Subtotal</span><span>${escapeHtml(formatMoney(order.subtotal_amount))}</span></p>
                             <p><span>Discount</span><span>${escapeHtml(formatMoney(order.discount_amount))}</span></p>
+                            <p><span>Shipping Fee</span><span>${escapeHtml(formatMoney(order.shipping_fee))}</span></p>
                             <p><strong>Total</strong><strong>${escapeHtml(formatMoney(order.total_amount))}</strong></p>
                         </div>
 
@@ -420,6 +422,10 @@ const AdminOrders = () => {
                                     <p className="mt-1 font-semibold">{formatMoney(order.total_amount)}</p>
                                 </div>
                                 <div className="rounded-xl border border-border/60 px-3 py-3">
+                                    <p className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">Shipping</p>
+                                    <p className="mt-1 font-semibold">{formatMoney(order.shipping_fee)}</p>
+                                </div>
+                                <div className="rounded-xl border border-border/60 px-3 py-3">
                                     <p className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">Created</p>
                                     <p className="mt-1 font-semibold">{new Date(order.created_at).toLocaleDateString()}</p>
                                 </div>
@@ -454,21 +460,22 @@ const AdminOrders = () => {
             <div className="hidden overflow-hidden rounded-xl border border-border bg-card-gradient md:block">
                 <Table>
                     <TableHeader>
-                        <TableRow className="hover:bg-transparent border-border">
-                            <TableHead>Order ID</TableHead>
-                            <TableHead>Customer</TableHead>
-                            <TableHead>Items</TableHead>
-                            <TableHead>Total</TableHead>
-                            <TableHead>Status</TableHead>
-                            <TableHead>Date</TableHead>
-                            <TableHead className="text-right">Actions</TableHead>
-                        </TableRow>
+                            <TableRow className="hover:bg-transparent border-border">
+                                <TableHead>Order ID</TableHead>
+                                <TableHead>Customer</TableHead>
+                                <TableHead>Items</TableHead>
+                                <TableHead>Total</TableHead>
+                                <TableHead>Shipping</TableHead>
+                                <TableHead>Status</TableHead>
+                                <TableHead>Date</TableHead>
+                                <TableHead className="text-right">Actions</TableHead>
+                            </TableRow>
                     </TableHeader>
                     <TableBody>
                         {loading ? (
-                            <TableRow><TableCell colSpan={7} className="text-center py-10">Loading orders...</TableCell></TableRow>
+                            <TableRow><TableCell colSpan={8} className="text-center py-10">Loading orders...</TableCell></TableRow>
                         ) : filteredOrders.length === 0 ? (
-                            <TableRow><TableCell colSpan={7} className="text-center py-10">No orders found.</TableCell></TableRow>
+                            <TableRow><TableCell colSpan={8} className="text-center py-10">No orders found.</TableCell></TableRow>
                         ) : (
                             filteredOrders.map((order) => (
                                 <TableRow key={order.id} className="border-border hover:bg-secondary/30">
@@ -490,6 +497,7 @@ const AdminOrders = () => {
                                         </div>
                                     </TableCell>
                                     <TableCell>{formatMoney(order.total_amount)}</TableCell>
+                                    <TableCell>{formatMoney(order.shipping_fee)}</TableCell>
                                     <TableCell>
                                         <div className="space-y-2">
                                             <Badge className={getOrderStatusMeta(order.status).badgeClass}>
@@ -620,6 +628,7 @@ const AdminOrders = () => {
                                         <p><span className="text-muted-foreground">Items Subtotal:</span> {formatMoney(selectedOrderItemTotal)}</p>
                                         <p><span className="text-muted-foreground">Stored Subtotal:</span> {formatMoney(selectedOrder.subtotal_amount)}</p>
                                         <p><span className="text-muted-foreground">Discount:</span> {formatMoney(selectedOrder.discount_amount)}</p>
+                                        <p><span className="text-muted-foreground">Shipping Fee:</span> {formatMoney(selectedOrder.shipping_fee)}</p>
                                         <p className="font-semibold"><span className="text-muted-foreground font-normal">Total:</span> {formatMoney(selectedOrder.total_amount)}</p>
                                     </div>
                                 </div>

@@ -1,12 +1,20 @@
 import { Mail, Phone, MapPin, Send, Loader2 } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { useState } from "react";
 import { toast } from "sonner";
+import { fetchHomePageSettings } from "@/lib/api";
 
 const Contact = () => {
     const [isLoading, setIsLoading] = useState(false);
+    const { data: settings } = useQuery({
+        queryKey: ["homepage-settings"],
+        queryFn: fetchHomePageSettings,
+    });
+    const supportPhone = settings?.support_phone?.trim() || "";
+    const supportEmail = settings?.support_email?.trim() || "";
 
     const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
         e.preventDefault();
@@ -74,26 +82,36 @@ const Contact = () => {
                                     </div>
                                 </div>
 
-                                <div className="flex items-start gap-4">
-                                    <div className="w-12 h-12 bg-primary/10 rounded-full flex items-center justify-center shrink-0">
-                                        <Phone className="w-6 h-6 text-primary" />
+                                {supportPhone && (
+                                    <div className="flex items-start gap-4">
+                                        <div className="w-12 h-12 bg-primary/10 rounded-full flex items-center justify-center shrink-0">
+                                            <Phone className="w-6 h-6 text-primary" />
+                                        </div>
+                                        <div>
+                                            <h3 className="font-bold text-lg mb-1">Call Us</h3>
+                                            <a href={`tel:${supportPhone}`} className="text-gray-400 hover:text-primary transition-colors">{supportPhone}</a>
+                                            <p className="text-gray-500 text-sm">Mon - Sat, 9am - 9pm</p>
+                                        </div>
                                     </div>
-                                    <div>
-                                        <h3 className="font-bold text-lg mb-1">Call Us</h3>
-                                        <p className="text-gray-400">+92 300 1234567</p>
-                                        <p className="text-gray-500 text-sm">Mon - Sat, 9am - 9pm</p>
-                                    </div>
-                                </div>
+                                )}
 
-                                <div className="flex items-start gap-4">
-                                    <div className="w-12 h-12 bg-primary/10 rounded-full flex items-center justify-center shrink-0">
-                                        <Mail className="w-6 h-6 text-primary" />
+                                {supportEmail && (
+                                    <div className="flex items-start gap-4">
+                                        <div className="w-12 h-12 bg-primary/10 rounded-full flex items-center justify-center shrink-0">
+                                            <Mail className="w-6 h-6 text-primary" />
+                                        </div>
+                                        <div>
+                                            <h3 className="font-bold text-lg mb-1">Email Us</h3>
+                                            <a href={`mailto:${supportEmail}`} className="text-gray-400 hover:text-primary transition-colors">{supportEmail}</a>
+                                        </div>
                                     </div>
-                                    <div>
-                                        <h3 className="font-bold text-lg mb-1">Email Us</h3>
-                                        <p className="text-gray-400">support@powerfuel.pk</p>
+                                )}
+
+                                {!supportPhone && !supportEmail && (
+                                    <div className="rounded-xl border border-white/10 bg-black/20 p-4 text-sm text-gray-400">
+                                        Support contact details are being updated. Please use the message form and we will get back to you.
                                     </div>
-                                </div>
+                                )}
                             </div>
                         </div>
                     </div>

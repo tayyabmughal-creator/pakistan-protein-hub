@@ -1,4 +1,7 @@
+from unittest.mock import patch
+
 from django.contrib.auth import get_user_model
+from django.test import override_settings
 from rest_framework import status
 from rest_framework.test import APITestCase
 
@@ -36,6 +39,19 @@ class UserAuthTests(APITestCase):
         self.assertEqual(login_response.status_code, status.HTTP_200_OK)
         self.assertIn("access", login_response.data)
         self.assertIn("refresh", login_response.data)
+
+    @override_settings(FRONTEND_URL="https://frontend.example.com", DEFAULT_FROM_EMAIL="noreply@example.com")
+    @patch("users.views.send_mail")
+    def test_password_reset_request_is_generic_for_unknown_email(self, mock_send_mail):
+        response = self.client.post(
+            "/api/users/password-reset/",
+            {"email": "missing@example.com"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["detail"], "If an account exists, a reset link has been sent.")
+        mock_send_mail.assert_not_called()
 
     def test_profile_endpoint_returns_current_user(self):
         user = User.objects.create_user(

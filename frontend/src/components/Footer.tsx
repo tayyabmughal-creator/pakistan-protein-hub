@@ -14,6 +14,8 @@ const Footer = () => {
     { href: settings?.tiktok_url, label: "TikTok", icon: Music2 },
     { href: settings?.youtube_url, label: "YouTube", icon: Youtube },
   ].filter((item) => item.href);
+  const supportPhone = settings?.support_phone?.trim() || "";
+  const supportEmail = settings?.support_email?.trim() || "";
 
   return (
     <footer className="bg-[#050505] border-t border-white/10 pt-16 pb-8">
@@ -102,14 +104,23 @@ const Footer = () => {
                 <MapPin className="w-5 h-5 text-primary shrink-0 mt-1" />
                 <span>Shop #12, Phase 6, DHA Lahore, Pakistan</span>
               </li>
-              <li className="flex items-center gap-3 text-gray-400">
-                <Phone className="w-5 h-5 text-primary shrink-0" />
-                <span>+92 300 1234567</span>
-              </li>
-              <li className="flex items-center gap-3 text-gray-400">
-                <Mail className="w-5 h-5 text-primary shrink-0" />
-                <span>support@paknutrition.pk</span>
-              </li>
+              {supportPhone && (
+                <li className="flex items-center gap-3 text-gray-400">
+                  <Phone className="w-5 h-5 text-primary shrink-0" />
+                  <a href={`tel:${supportPhone}`} className="hover:text-primary transition-colors">{supportPhone}</a>
+                </li>
+              )}
+              {supportEmail && (
+                <li className="flex items-center gap-3 text-gray-400">
+                  <Mail className="w-5 h-5 text-primary shrink-0" />
+                  <a href={`mailto:${supportEmail}`} className="hover:text-primary transition-colors">{supportEmail}</a>
+                </li>
+              )}
+              {!supportPhone && !supportEmail && (
+                <li className="text-gray-400">
+                  <a href="/contact" className="hover:text-primary transition-colors">Use the contact form for support</a>
+                </li>
+              )}
             </ul>
           </div>
         </div>

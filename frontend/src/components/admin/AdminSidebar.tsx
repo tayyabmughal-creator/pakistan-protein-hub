@@ -1,4 +1,4 @@
-import { LayoutDashboard, Package, ListTree, ShoppingCart, Users, BarChart3, FileDown, Settings2, LogOut, ChevronRight, Store, BadgePercent } from "lucide-react";
+import { LayoutDashboard, Package, ListTree, ShoppingCart, Users, BarChart3, FileDown, Settings2, LogOut, ChevronRight, Store, BadgePercent, CreditCard } from "lucide-react";
 import { Link, useLocation } from "react-router-dom";
 import { cn } from "@/lib/utils";
 
@@ -15,6 +15,7 @@ const menuItems = [
     { title: "Categories", icon: ListTree, path: "/admin/categories" },
     { title: "Deals", icon: BadgePercent, path: "/admin/promotions" },
     { title: "Orders", icon: ShoppingCart, path: "/admin/orders" },
+    { title: "Payments", icon: CreditCard, path: "/admin/payments" },
     { title: "Homepage", icon: Settings2, path: "/admin/homepage" },
     { title: "Reports", icon: FileDown, path: "/admin/reports" },
 ];

@@ -87,7 +87,7 @@ class PasswordResetRequestView(APIView):
             try:
                 user = User.objects.get(email=email)
             except User.DoesNotExist:
-                return Response({"detail": "Email does not exist. Please enter the correct email."}, status=status.HTTP_400_BAD_REQUEST)
+                return Response({"detail": "If an account exists, a reset link has been sent."}, status=status.HTTP_200_OK)
 
             token = default_token_generator.make_token(user)
             uid = urlsafe_base64_encode(force_bytes(user.pk))

@@ -1,12 +1,13 @@
 import { useEffect, useState } from "react";
 import { useParams, Link } from "react-router-dom";
-import { fetchOrderById, cancelOrder, getImageUrl } from "@/lib/api";
+import { useQuery } from "@tanstack/react-query";
+import { fetchHomePageSettings, fetchOrderById, cancelOrder, getImageUrl } from "@/lib/api";
 import Loader from "@/components/Loader";
 import PageHeader from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import { AlertCircle, CheckCircle, Package, Truck, XCircle } from "lucide-react";
+import { CheckCircle, Package, Truck, XCircle } from "lucide-react";
 import { getOrderProgressIndex, getOrderStatusMeta, ORDER_FLOW } from "@/lib/orderStatus";
 
 const OrderDetails = () => {
@@ -14,6 +15,10 @@ const OrderDetails = () => {
     const [order, setOrder] = useState<any>(null);
     const [loading, setLoading] = useState(true);
     const [cancelling, setCancelling] = useState(false);
+    const { data: settings } = useQuery({
+        queryKey: ["homepage-settings"],
+        queryFn: fetchHomePageSettings,
+    });
 
     const loadOrder = async () => {
         try {
@@ -64,6 +69,16 @@ const OrderDetails = () => {
     const isCancelled = order.status === "CANCELLED";
     const statusMeta = getOrderStatusMeta(order.status);
     const shippingLines = order.shipping_address ? String(order.shipping_address).split("\n").filter(Boolean) : [];
+    const discountAmount = Number(order.discount_amount || 0);
+    const shippingFee = Number(order.shipping_fee || 0);
+    const supportPhone = settings?.support_phone?.trim() || "";
+    const supportEmail = settings?.support_email?.trim() || "";
+    const supportLabel = supportPhone && supportEmail ? `${supportPhone} or ${supportEmail}` : supportPhone || supportEmail || "via the contact page";
+    const canCancelOrder = (order.status === "PENDING" || order.status === "CONFIRMED") && order.payment_status !== "PAID";
+    const showPaidOrderNotice = (order.status === "PENDING" || order.status === "CONFIRMED") && order.payment_status === "PAID";
+    const showProcessedOrderNotice = order.status === "SHIPPED" || order.status === "DELIVERED";
+    const progressPercent = ((currentStep + 1) / steps.length) * 100;
+    const currentStepLabel = steps[currentStep]?.label || statusMeta.shortLabel;
 
     return (
         <div className="container mx-auto px-4 py-8">
@@ -96,37 +111,85 @@ const OrderDetails = () => {
                             </div>
                         ) : (
                             <div className="space-y-6">
-                                <div className="flex items-center justify-between text-xs uppercase tracking-wider text-muted-foreground">
-                                    <span>Current Progress</span>
-                                    <span>Step {currentStep + 1} of {ORDER_FLOW.length}</span>
+                                <div className="rounded-2xl border border-primary/15 bg-primary/[0.06] p-5">
+                                    <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                                        <div className="max-w-2xl">
+                                            <p className="text-xs uppercase tracking-[0.22em] text-primary">Current Progress</p>
+                                            <h4 className="mt-2 font-heading text-2xl font-bold text-foreground">{currentStepLabel}</h4>
+                                            <p className="mt-2 text-sm text-muted-foreground">{statusMeta.helper}</p>
+                                        </div>
+                                        <div className="rounded-xl border border-primary/15 bg-background/80 px-4 py-3 lg:min-w-[190px]">
+                                            <p className="text-[11px] uppercase tracking-[0.2em] text-muted-foreground">Stage</p>
+                                            <p className="mt-1 text-lg font-semibold text-foreground">Step {currentStep + 1} of {steps.length}</p>
+                                            <p className="text-xs text-muted-foreground">{Math.round(progressPercent)}% complete</p>
+                                        </div>
+                                    </div>
+                                    <div className="mt-5">
+                                        <div className="flex items-center justify-between text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
+                                            <span>Fulfillment Progress</span>
+                                            <span>{Math.round(progressPercent)}%</span>
+                                        </div>
+                                        <div className="mt-2 h-2.5 w-full overflow-hidden rounded-full bg-primary/10">
+                                            <div
+                                                className="h-full rounded-full bg-primary transition-all duration-500"
+                                                style={{ width: `${progressPercent}%` }}
+                                            />
+                                        </div>
+                                    </div>
                                 </div>
-                                <div className="relative">
-                                {/* Timeline Background */}
-                                <div className="absolute top-1/2 left-0 w-full h-1 bg-secondary -z-10 -translate-y-1/2 rounded-full" />
-                                {/* Timeline Progress */}
-                                <div
-                                    className="absolute top-1/2 left-0 h-1 bg-primary -z-10 -translate-y-1/2 rounded-full transition-all duration-500"
-                                    style={{ width: `${(currentStep / (steps.length - 1)) * 100}%` }}
-                                />
 
-                                <div className="flex justify-between w-full">
+                                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
                                     {steps.map((step, idx) => {
                                         const Icon = step.icon;
-                                        const isActive = idx <= currentStep;
+                                        const isCompleted = idx < currentStep;
+                                        const isCurrent = idx === currentStep;
                                         return (
-                                            <div key={step.status} className="flex flex-col items-center gap-2 bg-background px-2 z-10">
-                                                <div className={`w-8 h-8 rounded-full flex items-center justify-center border-2 transition-colors ${isActive ? "bg-primary border-primary text-primary-foreground shadow-glow" : "bg-card border-muted text-muted-foreground"
-                                                    }`}>
-                                                    <Icon className="w-4 h-4" />
+                                            <div
+                                                key={step.status}
+                                                className={`rounded-2xl border p-4 transition-all ${
+                                                    isCurrent
+                                                        ? "border-primary/40 bg-primary/[0.08] shadow-glow"
+                                                        : isCompleted
+                                                            ? "border-emerald-500/20 bg-emerald-500/[0.06]"
+                                                            : "border-border/60 bg-background/40"
+                                                }`}
+                                            >
+                                                <div className="flex items-start justify-between gap-3">
+                                                    <div
+                                                        className={`flex h-11 w-11 items-center justify-center rounded-2xl border transition-colors ${
+                                                            isCurrent
+                                                                ? "border-primary bg-primary text-primary-foreground"
+                                                                : isCompleted
+                                                                    ? "border-emerald-500/30 bg-emerald-500/15 text-emerald-600"
+                                                                    : "border-border bg-background text-muted-foreground"
+                                                        }`}
+                                                    >
+                                                        <Icon className="h-5 w-5" />
+                                                    </div>
+                                                    <span
+                                                        className={`rounded-full px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] ${
+                                                            isCurrent
+                                                                ? "bg-primary text-primary-foreground"
+                                                                : isCompleted
+                                                                    ? "bg-emerald-500/15 text-emerald-600"
+                                                                    : "bg-secondary text-muted-foreground"
+                                                        }`}
+                                                    >
+                                                        {isCurrent ? "Current" : isCompleted ? "Done" : `Step ${idx + 1}`}
+                                                    </span>
                                                 </div>
-                                                <span className={`text-xs font-bold uppercase tracking-wider ${isActive ? "text-primary" : "text-muted-foreground"}`}>
-                                                    {step.label}
-                                                </span>
+                                                <p className="mt-4 text-sm font-semibold text-foreground">{step.label}</p>
+                                                <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                                                    {isCurrent
+                                                        ? "This stage is active right now."
+                                                        : isCompleted
+                                                            ? "This stage has already been completed."
+                                                            : "This step will unlock next in the delivery flow."}
+                                                </p>
                                             </div>
                                         );
                                     })}
                                 </div>
-                            </div>
                                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                                     <div className="rounded-xl border border-border/60 bg-background/40 p-4">
                                         <p className="text-xs uppercase tracking-wider text-muted-foreground">What This Means</p>
@@ -199,20 +262,38 @@ const OrderDetails = () => {
                         <div className="space-y-3 mb-6">
                             <div className="flex justify-between text-muted-foreground">
                                 <span>Subtotal</span>
-                                <span className="text-foreground font-medium">PKR {Number(order.total_amount).toLocaleString()}</span>
+                                <span className="text-foreground font-medium">PKR {Number(order.subtotal_amount).toLocaleString()}</span>
                             </div>
+                            {discountAmount > 0 && (
+                                <div className="flex justify-between text-green-600 gap-4">
+                                    <span>Promo Discount {order.applied_promo_code ? `(${order.applied_promo_code})` : ""}</span>
+                                    <span>-PKR {discountAmount.toLocaleString()}</span>
+                                </div>
+                            )}
                             <div className="flex justify-between text-muted-foreground">
                                 <span>Shipping Fee</span>
-                                <span className="text-foreground font-medium text-green-600">Free</span>
+                                <span className="text-foreground font-medium">{shippingFee === 0 ? "Free" : `PKR ${shippingFee.toLocaleString()}`}</span>
                             </div>
                             <div className="flex justify-between text-muted-foreground">
                                 <span>Payment Method</span>
-                                <span className="text-foreground font-medium">{order.payment_method}</span>
+                                <span className="text-foreground font-medium">{String(order.payment_method).replace(/_/g, " ")}</span>
                             </div>
                             <div className="flex justify-between text-muted-foreground">
-                                <span>Status</span>
-                                <span className="text-foreground font-medium">{statusMeta.shortLabel}</span>
+                                <span>Payment Status</span>
+                                <span className="text-foreground font-medium">{order.payment_status}</span>
                             </div>
+                            {order.payment_reference && (
+                                <div className="flex justify-between text-muted-foreground gap-4">
+                                    <span>Payment Reference</span>
+                                    <span className="text-right text-foreground font-medium break-all">{order.payment_reference}</span>
+                                </div>
+                            )}
+                            {order.payment_note && (
+                                <div className="space-y-1 text-muted-foreground">
+                                    <span className="block">Payment Note</span>
+                                    <p className="text-foreground whitespace-pre-wrap">{order.payment_note}</p>
+                                </div>
+                            )}
                             <div className="h-px bg-border my-2" />
                             <div className="flex justify-between text-xl font-bold font-heading">
                                 <span>Total</span>
@@ -221,8 +302,7 @@ const OrderDetails = () => {
                         </div>
 
                         {/* Actions */}
-                        {/* Actions */}
-                        {(order.status === "PENDING" || order.status === "CONFIRMED") ? (
+                        {canCancelOrder ? (
                             <Button
                                 variant="destructive"
                                 className="w-full font-bold"
@@ -237,12 +317,20 @@ const OrderDetails = () => {
                                     "Cancel Order"
                                 )}
                             </Button>
-                        ) : (order.status === "SHIPPED" || order.status === "DELIVERED") ? (
+                        ) : showPaidOrderNotice ? (
+                            <div className="bg-muted p-4 rounded-xl text-center">
+                                <p className="text-sm font-bold text-muted-foreground mb-1">Paid order support required</p>
+                                <p className="text-xs text-muted-foreground">
+                                    Online payments are verified before any cancellation request can be handled. <br />
+                                    Contact support: <span className="text-primary font-bold">{supportLabel}</span>
+                                </p>
+                            </div>
+                        ) : showProcessedOrderNotice ? (
                             <div className="bg-muted p-4 rounded-xl text-center">
                                 <p className="text-sm font-bold text-muted-foreground mb-1">Cannot Cancel Order</p>
                                 <p className="text-xs text-muted-foreground">
                                     Order has already been processed. <br />
-                                    Contact Admin: <span className="text-primary font-bold">0300 1234567</span>
+                                    Contact support: <span className="text-primary font-bold">{supportLabel}</span>
                                 </p>
                             </div>
                         ) : null}

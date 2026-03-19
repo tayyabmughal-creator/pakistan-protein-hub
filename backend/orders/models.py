@@ -1,5 +1,7 @@
-from django.db import models
+import uuid
+
 from django.conf import settings
+from django.db import models
 from products.models import Product
 from promotions.models import Promotion
 
@@ -13,6 +15,10 @@ class Order(models.Model):
     )
     PAYMENT_METHOD_CHOICES = (
         ('COD', 'Cash on Delivery'),
+        ('EASYPAISA', 'Easypaisa Transfer'),
+        ('JAZZCASH', 'JazzCash Transfer'),
+        ('BANK_TRANSFER', 'Bank Transfer'),
+        ('SAFEPAY', 'Cards, Wallets & Bank Transfer'),
     )
     PAYMENT_STATUS_CHOICES = (
         ('PENDING', 'Pending'),
@@ -28,10 +34,16 @@ class Order(models.Model):
     applied_promo_code = models.CharField(max_length=50, blank=True)
     subtotal_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     discount_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    shipping_fee = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     total_amount = models.DecimalField(max_digits=12, decimal_places=2)
     shipping_address = models.TextField() # Snapshot of address
-    payment_method = models.CharField(max_length=10, choices=PAYMENT_METHOD_CHOICES, default='COD')
+    payment_method = models.CharField(max_length=20, choices=PAYMENT_METHOD_CHOICES, default='COD')
+    payment_provider = models.CharField(max_length=20, blank=True, default='')
+    payment_reference = models.CharField(max_length=120, blank=True)
+    payment_tracker = models.CharField(max_length=120, blank=True)
+    payment_payload = models.JSONField(default=dict, blank=True)
     payment_status = models.CharField(max_length=10, choices=PAYMENT_STATUS_CHOICES, default='PENDING')
+    paid_at = models.DateTimeField(null=True, blank=True)
     status = models.CharField(max_length=20, choices=ORDER_STATUS_CHOICES, default='PENDING')
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -49,3 +61,49 @@ class OrderItem(models.Model):
 
     def __str__(self):
         return f"{self.quantity} x {self.product_name}"
+
+
+class PaymentSession(models.Model):
+    STATUS_CHOICES = (
+        ('PENDING', 'Pending'),
+        ('COMPLETED', 'Completed'),
+        ('CANCELLED', 'Cancelled'),
+        ('FAILED', 'Failed'),
+        ('REVIEW', 'Review Required'),
+    )
+    PROVIDER_CHOICES = (
+        ('SAFEPAY', 'Safepay'),
+    )
+
+    public_id = models.UUIDField(default=uuid.uuid4, editable=False, unique=True)
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='payment_sessions',
+        null=True,
+        blank=True,
+    )
+    guest_name = models.CharField(max_length=255, blank=True)
+    guest_email = models.EmailField(blank=True)
+    guest_phone_number = models.CharField(max_length=20, blank=True)
+    promotion = models.ForeignKey(Promotion, null=True, blank=True, on_delete=models.SET_NULL, related_name='payment_sessions')
+    applied_promo_code = models.CharField(max_length=50, blank=True)
+    subtotal_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    discount_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    shipping_fee = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    total_amount = models.DecimalField(max_digits=12, decimal_places=2)
+    shipping_address = models.TextField()
+    items_snapshot = models.JSONField(default=list, blank=True)
+    payment_method = models.CharField(max_length=20, choices=Order.PAYMENT_METHOD_CHOICES, default='SAFEPAY')
+    provider = models.CharField(max_length=20, choices=PROVIDER_CHOICES, default='SAFEPAY')
+    gateway_tracker = models.CharField(max_length=120, blank=True)
+    gateway_reference = models.CharField(max_length=120, blank=True)
+    gateway_payload = models.JSONField(default=dict, blank=True)
+    checkout_url = models.URLField(blank=True)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='PENDING')
+    order = models.ForeignKey(Order, null=True, blank=True, on_delete=models.SET_NULL, related_name='payment_sessions')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"PaymentSession {self.public_id} ({self.get_status_display()})"

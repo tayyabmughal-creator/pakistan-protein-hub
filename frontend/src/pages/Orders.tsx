@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ArrowRight, Clock3, Package } from "lucide-react";
 import { getOrderStatusMeta, getOrderProgressIndex, ORDER_FLOW } from "@/lib/orderStatus";
+import { toast } from "sonner";
 
 const Orders = () => {
     const { user } = useAuth();
@@ -15,13 +16,36 @@ const Orders = () => {
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
-        if (user) {
+        let isMounted = true;
+
+        const loadOrders = async () => {
+            if (!user) {
+                return;
+            }
+
             setLoading(true);
-            fetchOrders().then((data) => {
-                setOrders(data);
-                setLoading(false);
-            });
-        }
+            try {
+                const data = await fetchOrders();
+                if (isMounted) {
+                    setOrders(data);
+                }
+            } catch {
+                if (isMounted) {
+                    setOrders([]);
+                    toast.error("Failed to load orders");
+                }
+            } finally {
+                if (isMounted) {
+                    setLoading(false);
+                }
+            }
+        };
+
+        loadOrders();
+
+        return () => {
+            isMounted = false;
+        };
     }, [user]);
 
     if (loading) return <div className="py-20 flex justify-center"><Loader size={40} /></div>;

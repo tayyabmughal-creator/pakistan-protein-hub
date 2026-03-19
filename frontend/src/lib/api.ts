@@ -49,6 +49,11 @@ export const fetchPromotions = async () => {
     return response.data;
 };
 
+export const fetchPaymentMethods = async () => {
+    const response = await apiClient.get("/payment-methods/");
+    return response.data;
+};
+
 export const fetchHomePageSettings = async () => {
     const response = await apiClient.get("/storefront/homepage-settings/");
     return response.data;
@@ -56,6 +61,26 @@ export const fetchHomePageSettings = async () => {
 
 export const fetchReviews = async (productId: number) => {
     const response = await apiClient.get(`/reviews/?product_id=${productId}`);
+    return response.data;
+};
+
+export const fetchReviewEligibility = async (productId: number) => {
+    const response = await apiClient.get(`/reviews/eligibility/?product_id=${productId}`);
+    return response.data;
+};
+
+export const createReview = async (data: { product: number; rating: number; comment: string }) => {
+    const response = await apiClient.post("/reviews/", data);
+    return response.data;
+};
+
+export const updateReview = async (id: number, data: { rating: number; comment: string }) => {
+    const response = await apiClient.patch(`/reviews/${id}/`, data);
+    return response.data;
+};
+
+export const deleteReview = async (id: number) => {
+    const response = await apiClient.delete(`/reviews/${id}/`);
     return response.data;
 };
 
@@ -102,8 +127,35 @@ export const deleteAddress = async (id: number) => {
 };
 
 // --- Orders ---
-export const createOrder = async (data: { address_id: number; payment_method: string }) => {
+export const createOrder = async (data: {
+    address_id: number;
+    payment_method: string;
+    promo_code?: string;
+    payment_reference?: string;
+    payment_note?: string;
+}) => {
     const response = await apiClient.post("/orders/", data);
+    return response.data;
+};
+
+export const createPaymentSession = async (data: {
+    address_id?: number;
+    guest_name?: string;
+    guest_email?: string;
+    guest_phone_number?: string;
+    city?: string;
+    area?: string;
+    street?: string;
+    payment_method: string;
+    promo_code?: string;
+    items?: { product_id: number; quantity: number }[];
+}) => {
+    const response = await apiClient.post("/orders/payment-sessions/", data);
+    return response.data;
+};
+
+export const fetchPaymentSession = async (publicId: string) => {
+    const response = await apiClient.get(`/orders/payment-sessions/${publicId}/`);
     return response.data;
 };
 
@@ -121,6 +173,8 @@ export const createGuestOrder = async (data: {
     street: string;
     payment_method: string;
     promo_code?: string;
+    payment_reference?: string;
+    payment_note?: string;
     items: { product_id: number; quantity: number }[];
 }) => {
     const response = await apiClient.post("/orders/", data);
@@ -274,6 +328,16 @@ export const downloadAdminReport = async (reportKey: "orders" | "customers" | "i
 
 export const updateOrderStatus = async (id: number, status: string) => {
     const response = await apiClient.patch(`/admin/orders/${id}/`, { status });
+    return response.data;
+};
+
+export const fetchAdminPaymentReviews = async (status = "REVIEW") => {
+    const response = await apiClient.get(`/admin/payment-sessions/?status=${encodeURIComponent(status)}`);
+    return response.data;
+};
+
+export const resolveAdminPaymentReview = async (publicId: string, action: "approve" | "fail") => {
+    const response = await apiClient.post(`/admin/payment-sessions/${publicId}/action/`, { action });
     return response.data;
 };
 

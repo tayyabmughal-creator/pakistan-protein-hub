@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useNavigate, Link } from "react-router-dom";
+import { useNavigate, Link, useLocation } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -15,6 +15,7 @@ const Login = () => {
     const [errorMessage, setErrorMessage] = useState("");
     const [loading, setLoading] = useState(false);
     const navigate = useNavigate();
+    const location = useLocation();
     const { login } = useAuth();
 
     const handleLogin = async (e: React.FormEvent) => {
@@ -38,11 +39,14 @@ const Login = () => {
                 description: "You have successfully logged in."
             });
 
-            if (user?.is_staff) {
-                navigate("/admin");
-            } else {
-                navigate("/");
-            }
+            const from = (location.state as { from?: { pathname?: string; search?: string; hash?: string } } | null)?.from;
+            const destination = from?.pathname
+                ? `${from.pathname}${from.search || ""}${from.hash || ""}`
+                : user.is_staff
+                    ? "/admin"
+                    : "/";
+
+            navigate(destination, { replace: true });
         } catch (error: any) {
             const msg = error.response?.data?.detail || "Login failed. Please check your credentials.";
             setErrorMessage("Incorrect email or password. Please try again.");

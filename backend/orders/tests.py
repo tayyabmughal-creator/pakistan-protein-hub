@@ -6,7 +6,7 @@ from cart.models import Cart, CartItem
 from products.models import Category, Product
 from promotions.models import Promotion
 from users.models import Address
-from .models import Order
+from .models import Order, PaymentSession
 from django.utils import timezone
 from datetime import timedelta
 
@@ -31,6 +31,17 @@ class OrderApiTests(APITestCase):
             weight="5kg",
             description="High calorie mass gainer",
             price="12000.00",
+            stock=10,
+            is_active=True,
+        )
+        self.low_price_product = Product.objects.create(
+            name="Creatine Monohydrate",
+            slug="creatine-monohydrate",
+            category=self.category,
+            brand="MuscleTech",
+            weight="300g",
+            description="Daily strength support",
+            price="4000.00",
             stock=10,
             is_active=True,
         )
@@ -72,6 +83,25 @@ class OrderApiTests(APITestCase):
         self.assertEqual(self.product.stock, 8)
         self.assertEqual(self.user.cart.items.count(), 0)
 
+    def test_create_order_adds_shipping_for_low_value_carts(self):
+        cart = Cart.objects.get(user=self.user)
+        cart.items.all().delete()
+        CartItem.objects.create(cart=cart, product=self.low_price_product, quantity=1)
+
+        response = self.client.post(
+            "/api/orders/",
+            {"address_id": self.address.id, "payment_method": "COD"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        order = Order.objects.get(user=self.user)
+        self.low_price_product.refresh_from_db()
+        self.assertEqual(str(order.subtotal_amount), "4000.00")
+        self.assertEqual(str(order.shipping_fee), "250.00")
+        self.assertEqual(str(order.total_amount), "4250.00")
+        self.assertEqual(self.low_price_product.stock, 9)
+
     def test_create_order_applies_promotion_discount(self):
         response = self.client.post(
             "/api/orders/",
@@ -111,6 +141,35 @@ class OrderApiTests(APITestCase):
         self.product.refresh_from_db()
         self.assertEqual(order.status, "CANCELLED")
         self.assertEqual(self.product.stock, 10)
+
+    def test_paid_order_cannot_be_cancelled_by_customer(self):
+        order = Order.objects.create(
+            user=self.user,
+            subtotal_amount="12000.00",
+            total_amount="12000.00",
+            shipping_fee="0.00",
+            shipping_address="Order User, 123456789, Street 1, Clifton, Karachi",
+            payment_method="SAFEPAY",
+            payment_status="PAID",
+            status="CONFIRMED",
+        )
+        order.items.create(
+            product=self.product,
+            product_name=self.product.name,
+            quantity=1,
+            price="12000.00",
+        )
+        self.product.stock = 9
+        self.product.save(update_fields=["stock"])
+
+        response = self.client.post(f"/api/orders/{order.id}/cancel/")
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("Paid orders cannot be self-cancelled", response.data["error"])
+        order.refresh_from_db()
+        self.product.refresh_from_db()
+        self.assertEqual(order.status, "CONFIRMED")
+        self.assertEqual(self.product.stock, 9)
 
     def test_guest_can_place_order_without_account(self):
         self.client.force_authenticate(user=None)
@@ -171,3 +230,91 @@ class OrderApiTests(APITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data["guest_email"], "guest@example.com")
+
+
+class AdminPaymentReviewTests(APITestCase):
+    def setUp(self):
+        self.admin = User.objects.create_user(
+            username="admin-payments@example.com",
+            email="admin-payments@example.com",
+            name="Admin Payments",
+            password="StrongPass123",
+            is_staff=True,
+            is_superuser=True,
+        )
+        self.customer = User.objects.create_user(
+            username="customer-payments@example.com",
+            email="customer-payments@example.com",
+            name="Customer Payments",
+            password="StrongPass123",
+        )
+        category = Category.objects.create(name="Protein", slug="protein-admin-review")
+        self.product = Product.objects.create(
+            name="Isolate",
+            slug="isolate-admin-review",
+            category=category,
+            brand="PakNutrition",
+            weight="2kg",
+            description="Lean isolate",
+            price="8500.00",
+            stock=6,
+            is_active=True,
+        )
+        self.session = PaymentSession.objects.create(
+            user=self.customer,
+            subtotal_amount="8500.00",
+            discount_amount="0.00",
+            shipping_fee="0.00",
+            total_amount="8500.00",
+            shipping_address="Customer Payments, 03001234567, Street 1, Area, Lahore",
+            items_snapshot=[
+                {
+                    "product_id": self.product.id,
+                    "product_name": self.product.name,
+                    "quantity": 1,
+                    "price": "8500.00",
+                }
+            ],
+            payment_method="SAFEPAY",
+            provider="SAFEPAY",
+            status="REVIEW",
+            gateway_tracker="tracker-123",
+            gateway_reference="ref-123",
+            gateway_payload={"payment_status": "captured"},
+        )
+        self.client.force_authenticate(user=self.admin)
+
+    def test_admin_can_list_review_payment_sessions(self):
+        response = self.client.get("/api/admin/payment-sessions/")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(response.data), 1)
+        self.assertEqual(response.data[0]["status"], "REVIEW")
+        self.assertEqual(response.data[0]["customer_email"], self.customer.email)
+
+    def test_admin_can_approve_review_payment_session(self):
+        response = self.client.post(
+            f"/api/admin/payment-sessions/{self.session.public_id}/action/",
+            {"action": "approve"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.session.refresh_from_db()
+        self.product.refresh_from_db()
+        self.assertEqual(self.session.status, "COMPLETED")
+        self.assertIsNotNone(self.session.order_id)
+        self.assertEqual(self.session.order.payment_status, "PAID")
+        self.assertEqual(self.session.order.status, "CONFIRMED")
+        self.assertEqual(self.product.stock, 5)
+
+    def test_admin_can_fail_review_payment_session(self):
+        response = self.client.post(
+            f"/api/admin/payment-sessions/{self.session.public_id}/action/",
+            {"action": "fail"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.session.refresh_from_db()
+        self.assertEqual(self.session.status, "FAILED")

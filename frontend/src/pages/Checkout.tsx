@@ -2,7 +2,15 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Check, Plus, MapPin, Truck, CreditCard } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { fetchCart, fetchAddresses, createOrder, createGuestOrder, fetchPromotions } from "@/lib/api";
+import {
+    createGuestOrder,
+    createOrder,
+    createPaymentSession,
+    fetchAddresses,
+    fetchCart,
+    fetchPaymentMethods,
+    fetchPromotions,
+} from "@/lib/api";
 import { previewPromotion } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 import { toast } from "sonner";
@@ -13,6 +21,7 @@ import { clearGuestCart, getGuestCartItems } from "@/lib/guestCart";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { saveGuestOrderConfirmation } from "@/lib/guestOrderSession";
 import { clearAppliedPromoCode, getAppliedPromoCode } from "@/lib/promoSession";
 
 interface Address {
@@ -36,6 +45,17 @@ type GuestFormValues = {
 
 type GuestFormErrors = Partial<Record<keyof GuestFormValues, string>>;
 
+type PaymentMethod = {
+    code: string;
+    label: string;
+    description: string;
+    provider: string;
+    is_online: boolean;
+    requires_reference: boolean;
+    reference_label: string;
+    details: string[];
+};
+
 const Checkout = () => {
     const { user } = useAuth();
     const navigate = useNavigate();
@@ -47,6 +67,10 @@ const Checkout = () => {
     const [placingOrder, setPlacingOrder] = useState(false);
     const [promoPreview, setPromoPreview] = useState<any | null>(null);
     const [hasActiveDeals, setHasActiveDeals] = useState(false);
+    const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>([]);
+    const [selectedPaymentMethod, setSelectedPaymentMethod] = useState("COD");
+    const [paymentReference, setPaymentReference] = useState("");
+    const [paymentNote, setPaymentNote] = useState("");
     const [guestForm, setGuestForm] = useState<GuestFormValues>({
         guest_name: "",
         guest_email: "",
@@ -126,9 +150,19 @@ const Checkout = () => {
                 return sum + (price * item.quantity);
             }, 0);
             setCartTotal(subtotal);
-            const activePromotions = await fetchPromotions();
+            const [activePromotions, availablePaymentMethods] = await Promise.all([
+                fetchPromotions(),
+                fetchPaymentMethods(),
+            ]);
             const hasDeals = (activePromotions || []).length > 0;
             setHasActiveDeals(hasDeals);
+            setPaymentMethods(availablePaymentMethods);
+            setSelectedPaymentMethod((currentMethod) => {
+                if (availablePaymentMethods.some((method: PaymentMethod) => method.code === currentMethod)) {
+                    return currentMethod;
+                }
+                return availablePaymentMethods[0]?.code || "COD";
+            });
             const storedPromo = getAppliedPromoCode();
             if (storedPromo && hasDeals) {
                 try {
@@ -177,6 +211,50 @@ const Checkout = () => {
         try {
             setPlacingOrder(true);
             let order;
+            const selectedMethod = paymentMethods.find((method) => method.code === selectedPaymentMethod);
+
+            if (selectedMethod?.requires_reference && !paymentReference.trim()) {
+                toast.error("Please enter the payment transaction reference.");
+                return;
+            }
+
+            if (selectedPaymentMethod === "SAFEPAY") {
+                if (user) {
+                    if (!selectedAddressId) {
+                        toast.error("Please select a delivery address");
+                        return;
+                    }
+                    const session = await createPaymentSession({
+                        address_id: selectedAddressId,
+                        payment_method: selectedPaymentMethod,
+                        promo_code: promoPreview?.code,
+                    });
+                    window.location.assign(session.checkout_url);
+                    return;
+                }
+
+                const guestItems = getGuestCartItems();
+                if (guestItems.length === 0) {
+                    toast.error("Your cart is empty");
+                    return;
+                }
+                if (!validateGuestForm()) {
+                    toast.error("Please correct the highlighted delivery details");
+                    return;
+                }
+                const session = await createPaymentSession({
+                    ...guestForm,
+                    payment_method: selectedPaymentMethod,
+                    promo_code: promoPreview?.code,
+                    items: guestItems.map((item) => ({
+                        product_id: item.product.id,
+                        quantity: item.quantity,
+                    })),
+                });
+                window.location.assign(session.checkout_url);
+                return;
+            }
+
             if (user) {
                 if (!selectedAddressId) {
                     toast.error("Please select a delivery address");
@@ -184,8 +262,10 @@ const Checkout = () => {
                 }
                 order = await createOrder({
                     address_id: selectedAddressId,
-                    payment_method: "COD",
+                    payment_method: selectedPaymentMethod,
                     promo_code: promoPreview?.code,
+                    payment_reference: paymentReference.trim(),
+                    payment_note: paymentNote.trim(),
                 });
                 navigate(`/orders/${order.id}`);
             } else {
@@ -200,13 +280,16 @@ const Checkout = () => {
                 }
                 order = await createGuestOrder({
                     ...guestForm,
-                    payment_method: "COD",
+                    payment_method: selectedPaymentMethod,
                     promo_code: promoPreview?.code,
+                    payment_reference: paymentReference.trim(),
+                    payment_note: paymentNote.trim(),
                     items: guestItems.map((item) => ({
                         product_id: item.product.id,
                         quantity: item.quantity,
                     })),
                 });
+                saveGuestOrderConfirmation(order);
                 clearGuestCart();
                 clearAppliedPromoCode();
                 navigate("/guest-order-confirmation", { state: { order } });
@@ -238,6 +321,7 @@ const Checkout = () => {
     const shipping = cartTotal > 5000 ? 0 : 250;
     const discount = Number(promoPreview?.discount_amount || 0);
     const finalTotal = cartTotal - discount + shipping;
+    const selectedMethod = paymentMethods.find((method) => method.code === selectedPaymentMethod);
 
     return (
         <div className="container mx-auto px-4 py-8">
@@ -331,16 +415,71 @@ const Checkout = () => {
                         <h3 className="font-heading text-xl font-bold mb-4 flex items-center gap-2">
                             <CreditCard className="text-primary" /> Payment Method
                         </h3>
-                        <div className="border border-primary bg-primary/5 rounded-xl p-4 flex items-center gap-4">
-                            <div className="w-12 h-8 bg-white border border-border rounded flex items-center justify-center font-bold text-xs">
-                                COD
-                            </div>
-                            <div>
-                                <p className="font-bold">Cash on Delivery</p>
-                                <p className="text-sm text-muted-foreground">Pay when you receive your order.</p>
-                            </div>
-                            <Check className="ml-auto w-5 h-5 text-primary" />
+                        <div className="space-y-3">
+                            {paymentMethods.map((method) => {
+                                const selected = selectedPaymentMethod === method.code;
+                                return (
+                                    <button
+                                        key={method.code}
+                                        type="button"
+                                        onClick={() => setSelectedPaymentMethod(method.code)}
+                                        className={`w-full rounded-xl border p-4 text-left transition-all ${
+                                            selected
+                                                ? "border-primary bg-primary/5 ring-1 ring-primary"
+                                                : "border-border hover:border-primary/40"
+                                        }`}
+                                    >
+                                        <div className="flex items-center gap-4">
+                                            <div className="flex h-10 min-w-16 items-center justify-center rounded-md border border-border bg-white px-3 text-xs font-bold">
+                                                {method.code === "COD" ? "COD" : method.code === "SAFEPAY" ? "ONLINE" : "MANUAL"}
+                                            </div>
+                                            <div className="flex-1">
+                                                <p className="font-bold">{method.label}</p>
+                                                <p className="text-sm text-muted-foreground">{method.description}</p>
+                                            </div>
+                                            {selected && <Check className="ml-auto h-5 w-5 text-primary" />}
+                                        </div>
+                                    </button>
+                                );
+                            })}
                         </div>
+                        {selectedMethod && (
+                            <div className="mt-4 rounded-xl border border-border/60 bg-background/50 p-4">
+                                <p className="text-sm font-semibold">How this payment works</p>
+                                <div className="mt-2 space-y-2 text-sm text-muted-foreground">
+                                    {selectedMethod.details.map((detail) => (
+                                        <p key={detail}>{detail}</p>
+                                    ))}
+                                </div>
+                                {selectedPaymentMethod === "SAFEPAY" && (
+                                    <p className="mt-3 text-sm text-muted-foreground">
+                                        You will be redirected to Safepay to complete the payment securely and then returned to PakNutrition.
+                                    </p>
+                                )}
+                                {selectedMethod.requires_reference && (
+                                    <div className="mt-4 space-y-4">
+                                        <div className="space-y-2">
+                                            <Label htmlFor="payment_reference">{selectedMethod.reference_label}</Label>
+                                            <Input
+                                                id="payment_reference"
+                                                value={paymentReference}
+                                                onChange={(e) => setPaymentReference(e.target.value)}
+                                                placeholder="Enter the transaction reference used for this payment"
+                                            />
+                                        </div>
+                                        <div className="space-y-2">
+                                            <Label htmlFor="payment_note">Payment Note (Optional)</Label>
+                                            <Textarea
+                                                id="payment_note"
+                                                value={paymentNote}
+                                                onChange={(e) => setPaymentNote(e.target.value)}
+                                                placeholder="Add sender name, wallet number, or any note to help verify the payment"
+                                            />
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        )}
                     </div>
 
                 </div>
@@ -384,9 +523,7 @@ const Checkout = () => {
                                     Processing...
                                 </>
                             ) : (
-                                <>
-                                    Place Order
-                                </>
+                                selectedPaymentMethod === "SAFEPAY" ? "Continue to Secure Payment" : "Place Order"
                             )}
                         </Button>
 

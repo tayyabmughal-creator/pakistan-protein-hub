@@ -1,8 +1,17 @@
 import { useEffect, useState } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate, useLocation } from "react-router-dom";
 import { Minus, Plus, ShoppingCart, Check, Star } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { fetchProductBySlug, fetchReviews, getImageUrl } from "@/lib/api";
+import { Textarea } from "@/components/ui/textarea";
+import {
+    createReview,
+    deleteReview,
+    fetchProductBySlug,
+    fetchReviewEligibility,
+    fetchReviews,
+    getImageUrl,
+    updateReview,
+} from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 import apiClient from "@/lib/apiClient";
 import { useQueryClient } from "@tanstack/react-query";
@@ -38,9 +47,18 @@ interface Review {
     created_at: string;
 }
 
+interface ReviewEligibility {
+    can_review: boolean;
+    has_delivered_purchase: boolean;
+    already_reviewed: boolean;
+    reason: string;
+    review: Review | null;
+}
+
 const ProductDetails = () => {
     const { slug } = useParams<{ slug: string }>();
     const navigate = useNavigate();
+    const location = useLocation();
     const { user } = useAuth();
     const queryClient = useQueryClient();
 
@@ -52,6 +70,12 @@ const ProductDetails = () => {
     const [showViewCart, setShowViewCart] = useState(false);
     const [reviews, setReviews] = useState<Review[]>([]);
     const [reviewsLoading, setReviewsLoading] = useState(true);
+    const [reviewEligibility, setReviewEligibility] = useState<ReviewEligibility | null>(null);
+    const [reviewEligibilityLoading, setReviewEligibilityLoading] = useState(false);
+    const [reviewRating, setReviewRating] = useState(5);
+    const [reviewComment, setReviewComment] = useState("");
+    const [submittingReview, setSubmittingReview] = useState(false);
+    const [deletingReview, setDeletingReview] = useState(false);
 
     useEffect(() => {
         const loadProduct = async () => {
@@ -71,27 +95,65 @@ const ProductDetails = () => {
         loadProduct();
     }, [slug, navigate]);
 
+    const loadReviews = async (productId: number) => {
+        try {
+            setReviewsLoading(true);
+            const data = await fetchReviews(productId);
+            setReviews(Array.isArray(data) ? data : []);
+        } catch {
+            setReviews([]);
+        } finally {
+            setReviewsLoading(false);
+        }
+    };
+
+    const loadReviewEligibility = async (productId: number) => {
+        if (!user) {
+            setReviewEligibility(null);
+            setReviewEligibilityLoading(false);
+            setReviewRating(5);
+            setReviewComment("");
+            return;
+        }
+
+        try {
+            setReviewEligibilityLoading(true);
+            const data = await fetchReviewEligibility(productId);
+            setReviewEligibility(data);
+            if (data?.review) {
+                setReviewRating(data.review.rating);
+                setReviewComment(data.review.comment);
+            } else {
+                setReviewRating(5);
+                setReviewComment("");
+            }
+        } catch (error: any) {
+            setReviewEligibility(null);
+            toast.error(error.response?.data?.error || "Failed to load review options");
+        } finally {
+            setReviewEligibilityLoading(false);
+        }
+    };
+
     useEffect(() => {
-        const loadReviews = async () => {
-            if (!product) {
-                setReviews([]);
-                setReviewsLoading(false);
-                return;
-            }
+        if (!product) {
+            setReviews([]);
+            setReviewsLoading(false);
+            setReviewEligibility(null);
+            setReviewEligibilityLoading(false);
+            return;
+        }
 
-            try {
-                setReviewsLoading(true);
-                const data = await fetchReviews(product.id);
-                setReviews(Array.isArray(data) ? data : []);
-            } catch {
-                setReviews([]);
-            } finally {
-                setReviewsLoading(false);
-            }
-        };
-
-        loadReviews();
-    }, [product]);
+        loadReviews(product.id);
+        if (user) {
+            loadReviewEligibility(product.id);
+        } else {
+            setReviewEligibility(null);
+            setReviewEligibilityLoading(false);
+            setReviewRating(5);
+            setReviewComment("");
+        }
+    }, [product?.id, user?.id]);
 
     const handleQuantityChange = (delta: number) => {
         setQuantity((prev) => {
@@ -142,6 +204,60 @@ const ProductDetails = () => {
         }
     };
 
+    const handleSubmitReview = async () => {
+        if (!product) return;
+        if (!reviewComment.trim()) {
+            toast.error("Please write a short review before submitting.");
+            return;
+        }
+
+        try {
+            setSubmittingReview(true);
+            if (reviewEligibility?.review) {
+                await updateReview(reviewEligibility.review.id, {
+                    rating: reviewRating,
+                    comment: reviewComment.trim(),
+                });
+                toast.success("Your review was updated.");
+            } else {
+                await createReview({
+                    product: product.id,
+                    rating: reviewRating,
+                    comment: reviewComment.trim(),
+                });
+                toast.success("Thanks for sharing your review.");
+            }
+            await Promise.all([loadReviews(product.id), loadReviewEligibility(product.id)]);
+        } catch (error: any) {
+            const message = error.response?.data?.non_field_errors?.[0]
+                || error.response?.data?.detail
+                || error.response?.data?.error
+                || "Could not save your review.";
+            toast.error(message);
+        } finally {
+            setSubmittingReview(false);
+        }
+    };
+
+    const handleDeleteReview = async () => {
+        if (!product || !reviewEligibility?.review) return;
+        // eslint-disable-next-line
+        if (!confirm("Delete your review for this product?")) return;
+
+        try {
+            setDeletingReview(true);
+            await deleteReview(reviewEligibility.review.id);
+            toast.success("Your review was deleted.");
+            setReviewRating(5);
+            setReviewComment("");
+            await Promise.all([loadReviews(product.id), loadReviewEligibility(product.id)]);
+        } catch (error: any) {
+            toast.error(error.response?.data?.detail || "Could not delete your review.");
+        } finally {
+            setDeletingReview(false);
+        }
+    };
+
     if (loading) {
         return (
             <div className="container mx-auto px-4 py-20 flex justify-center bg-[#050505] min-h-[60vh]">
@@ -166,6 +282,7 @@ const ProductDetails = () => {
     const averageRating = reviews.length
         ? reviews.reduce((sum, review) => sum + review.rating, 0) / reviews.length
         : 0;
+    const existingReview = reviewEligibility?.review;
 
     return (
         <div className="min-h-screen bg-[#050505] py-12">
@@ -328,6 +445,115 @@ const ProductDetails = () => {
                                 <Star className="w-4 h-4 fill-primary text-primary" />
                                 <span className="font-semibold">{averageRating.toFixed(1)} average rating</span>
                                 <span className="text-gray-500">from {reviews.length} review{reviews.length === 1 ? "" : "s"}</span>
+                            </div>
+                        )}
+                    </div>
+
+                    <div className="mt-8 rounded-xl border border-white/10 bg-black/20 p-5">
+                        {!user ? (
+                            <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+                                <div>
+                                    <p className="font-semibold text-white">Want to leave a review?</p>
+                                    <p className="mt-1 text-sm text-gray-400">
+                                        Sign in after your order is delivered and you will be able to share your feedback here.
+                                    </p>
+                                </div>
+                                <Button
+                                    variant="outline"
+                                    className="border-white/20 bg-transparent text-white hover:bg-white hover:text-black"
+                                    onClick={() => navigate("/login", { state: { from: location } })}
+                                >
+                                    Sign In to Review
+                                </Button>
+                            </div>
+                        ) : reviewEligibilityLoading ? (
+                            <div className="flex justify-center py-6">
+                                <Loader size={24} />
+                            </div>
+                        ) : reviewEligibility ? (
+                            reviewEligibility.can_review || reviewEligibility.already_reviewed ? (
+                                <div className="space-y-5">
+                                    <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+                                        <div>
+                                            <p className="font-semibold text-white">
+                                                {existingReview ? "Update your review" : "Write a review"}
+                                            </p>
+                                            <p className="text-sm text-gray-400">{reviewEligibility.reason}</p>
+                                        </div>
+                                        {existingReview && (
+                                            <span className="text-xs uppercase tracking-[0.2em] text-primary">Verified Buyer</span>
+                                        )}
+                                    </div>
+
+                                    <div>
+                                        <p className="mb-2 text-sm font-medium text-gray-300">Your Rating</p>
+                                        <div className="flex flex-wrap gap-2">
+                                            {Array.from({ length: 5 }).map((_, index) => {
+                                                const starValue = index + 1;
+                                                return (
+                                                    <button
+                                                        key={starValue}
+                                                        type="button"
+                                                        onClick={() => setReviewRating(starValue)}
+                                                        className={`rounded-full border px-3 py-2 transition-colors ${
+                                                            reviewRating >= starValue
+                                                                ? "border-primary bg-primary/10 text-primary"
+                                                                : "border-white/10 text-gray-500 hover:border-primary/40 hover:text-primary"
+                                                        }`}
+                                                    >
+                                                        <Star className={`h-4 w-4 ${reviewRating >= starValue ? "fill-primary text-primary" : ""}`} />
+                                                    </button>
+                                                );
+                                            })}
+                                        </div>
+                                    </div>
+
+                                    <div>
+                                        <p className="mb-2 text-sm font-medium text-gray-300">Your Review</p>
+                                        <Textarea
+                                            value={reviewComment}
+                                            onChange={(event) => setReviewComment(event.target.value)}
+                                            placeholder="Tell other customers what you liked, how it felt, or anything they should know."
+                                            className="min-h-[140px] border-white/10 bg-[#0b0b0b] text-white placeholder:text-gray-500"
+                                        />
+                                    </div>
+
+                                    <div className="flex flex-col gap-3 sm:flex-row">
+                                        <Button
+                                            onClick={handleSubmitReview}
+                                            disabled={submittingReview}
+                                            className="sm:min-w-[180px]"
+                                        >
+                                            {submittingReview
+                                                ? "Saving..."
+                                                : existingReview
+                                                    ? "Update Review"
+                                                    : "Submit Review"}
+                                        </Button>
+                                        {existingReview && (
+                                            <Button
+                                                variant="outline"
+                                                onClick={handleDeleteReview}
+                                                disabled={deletingReview || submittingReview}
+                                                className="border-white/20 bg-transparent text-white hover:bg-white hover:text-black"
+                                            >
+                                                {deletingReview ? "Deleting..." : "Delete Review"}
+                                            </Button>
+                                        )}
+                                    </div>
+                                </div>
+                            ) : (
+                                <div>
+                                    <p className="font-semibold text-white">Review locked for now</p>
+                                    <p className="mt-2 text-sm text-gray-400">{reviewEligibility.reason}</p>
+                                </div>
+                            )
+                        ) : (
+                            <div>
+                                <p className="font-semibold text-white">Review options unavailable</p>
+                                <p className="mt-2 text-sm text-gray-400">
+                                    We could not confirm your review status right now. Please try again in a moment.
+                                </p>
                             </div>
                         )}
                     </div>
