@@ -7,6 +7,7 @@ from django.conf import settings
 from django.core.mail import EmailMultiAlternatives
 from django.template.loader import render_to_string
 from django.utils.html import strip_tags
+from django.utils import timezone
 from users.models import AdminDevice
 
 
@@ -137,6 +138,12 @@ def _get_active_admin_tokens():
     )
 
 
+def _deactivate_token(token):
+    if not token:
+        return
+    AdminDevice.objects.filter(expo_push_token=token).update(is_active=False, last_seen_at=timezone.now())
+
+
 def _dispatch_expo_messages(messages):
     if not getattr(settings, "ADMIN_PUSH_NOTIFICATIONS_ENABLED", True):
         return
@@ -167,6 +174,30 @@ def _dispatch_expo_messages(messages):
 
         if payload.get("errors"):
             logger.warning("Expo push notification returned errors: %s", payload["errors"])
+
+        for index, ticket in enumerate(payload.get("data", [])):
+            if ticket.get("status") == "ok":
+                continue
+
+            message = batch[index] if index < len(batch) else {}
+            token = message.get("to")
+            details = ticket.get("details") or {}
+            error_code = details.get("error") or ticket.get("status")
+            logger.warning(
+                "Expo push notification ticket failed for %s: %s | message=%s | details=%s",
+                token,
+                error_code,
+                ticket.get("message", ""),
+                details,
+            )
+
+            if error_code == "DeviceNotRegistered":
+                _deactivate_token(token)
+            elif error_code in {"MismatchSenderId", "InvalidCredentials"}:
+                logger.warning(
+                    "Android Expo push credentials look incomplete or mismatched. "
+                    "Check the Expo project's FCM V1 service account and confirm it matches google-services.json."
+                )
 
 
 def _build_push_messages(*, title, body, data):

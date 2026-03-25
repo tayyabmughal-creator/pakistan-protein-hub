@@ -1,3 +1,4 @@
+import json
 from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
@@ -9,6 +10,7 @@ from products.models import Category, Product
 from promotions.models import Promotion
 from users.models import Address
 from .models import Order, PaymentSession
+from .notifications import send_admin_new_order_push
 from .services import PaymentSessionService
 from django.utils import timezone
 from datetime import timedelta
@@ -354,3 +356,85 @@ class AdminPaymentReviewTests(APITestCase):
         self.session.refresh_from_db()
         self.assertEqual(self.session.status, "REVIEW")
         mock_push.assert_called_once()
+
+
+class AdminPushDispatchTests(APITestCase):
+    def setUp(self):
+        self.admin = User.objects.create_user(
+            username="push-admin@example.com",
+            email="push-admin@example.com",
+            name="Push Admin",
+            password="StrongPass123",
+            is_staff=True,
+        )
+        self.customer = User.objects.create_user(
+            username="push-customer@example.com",
+            email="push-customer@example.com",
+            name="Push Customer",
+            password="StrongPass123",
+        )
+        category = Category.objects.create(name="Push Protein", slug="push-protein")
+        self.product = Product.objects.create(
+            name="Push Isolate",
+            slug="push-isolate",
+            category=category,
+            brand="PakNutrition",
+            weight="2kg",
+            description="Protein for push notification tests",
+            price="5000.00",
+            stock=4,
+            is_active=True,
+        )
+        self.order = Order.objects.create(
+            user=self.customer,
+            subtotal_amount="5000.00",
+            shipping_fee="0.00",
+            total_amount="5000.00",
+            shipping_address="Push Customer, 03001234567, Street 1, Area, Karachi",
+            payment_method="COD",
+        )
+        self.order.items.create(
+            product=self.product,
+            product_name=self.product.name,
+            quantity=1,
+            price="5000.00",
+        )
+
+    @patch("orders.notifications.request.urlopen")
+    def test_device_not_registered_deactivates_admin_token(self, mock_urlopen):
+        from users.models import AdminDevice
+
+        device = AdminDevice.objects.create(
+            user=self.admin,
+            installation_id="push-install-001",
+            expo_push_token="ExponentPushToken[stale-token]",
+            platform="android",
+            is_active=True,
+        )
+
+        class DummyResponse:
+            def __enter__(self):
+                return self
+
+            def __exit__(self, exc_type, exc, tb):
+                return False
+
+            def read(self):
+                return json.dumps(
+                    {
+                        "data": [
+                            {
+                                "status": "error",
+                                "message": "Device is not registered",
+                                "details": {"error": "DeviceNotRegistered"},
+                            }
+                        ]
+                    }
+                ).encode("utf-8")
+
+        mock_urlopen.return_value = DummyResponse()
+
+        send_admin_new_order_push(self.order)
+
+        device.refresh_from_db()
+        self.assertFalse(device.is_active)
