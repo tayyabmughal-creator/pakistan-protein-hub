@@ -1,4 +1,5 @@
 import base64
+import json
 import logging
 from urllib import error, parse, request
 
@@ -6,9 +7,12 @@ from django.conf import settings
 from django.core.mail import EmailMultiAlternatives
 from django.template.loader import render_to_string
 from django.utils.html import strip_tags
+from users.models import AdminDevice
 
 
 logger = logging.getLogger(__name__)
+EXPO_PUSH_ENDPOINT = "https://exp.host/--/api/v2/push/send"
+EXPO_PUSH_BATCH_SIZE = 100
 
 
 def _order_customer_name(order):
@@ -114,3 +118,104 @@ def send_order_notifications(order):
         send_order_confirmation_sms(order)
     except Exception as exc:
         logger.exception("Order confirmation SMS failed for order %s: %s", order.id, exc)
+
+
+def _chunked(items, size):
+    for index in range(0, len(items), size):
+        yield items[index:index + size]
+
+
+def _get_active_admin_tokens():
+    return list(
+        AdminDevice.objects.filter(
+            is_active=True,
+            user__is_staff=True,
+            user__is_active=True,
+        )
+        .values_list("expo_push_token", flat=True)
+        .distinct()
+    )
+
+
+def _dispatch_expo_messages(messages):
+    if not getattr(settings, "ADMIN_PUSH_NOTIFICATIONS_ENABLED", True):
+        return
+    if not messages:
+        return
+
+    headers = {
+        "Content-Type": "application/json",
+        "Accept": "application/json",
+    }
+    access_token = getattr(settings, "EXPO_PUSH_ACCESS_TOKEN", "").strip()
+    if access_token:
+        headers["Authorization"] = f"Bearer {access_token}"
+
+    for batch in _chunked(messages, EXPO_PUSH_BATCH_SIZE):
+        push_request = request.Request(
+            url=EXPO_PUSH_ENDPOINT,
+            data=json.dumps(batch).encode("utf-8"),
+            method="POST",
+            headers=headers,
+        )
+        try:
+            with request.urlopen(push_request, timeout=10) as response:
+                payload = json.loads(response.read().decode("utf-8"))
+        except error.URLError as exc:
+            logger.warning("Failed to send Expo push notification batch: %s", exc)
+            continue
+
+        if payload.get("errors"):
+            logger.warning("Expo push notification returned errors: %s", payload["errors"])
+
+
+def _build_push_messages(*, title, body, data):
+    tokens = _get_active_admin_tokens()
+    return [
+        {
+            "to": token,
+            "title": title,
+            "body": body,
+            "data": data,
+            "sound": "default",
+            "priority": "high",
+            "channelId": "orders",
+        }
+        for token in tokens
+    ]
+
+
+def send_admin_new_order_push(order):
+    try:
+        customer = _order_customer_name(order)
+        body = f"{customer} placed a {order.payment_method} order for PKR {order.total_amount}."
+        messages = _build_push_messages(
+            title=f"New order #{order.id}",
+            body=body,
+            data={
+                "type": "new-order",
+                "screen": "order-detail",
+                "orderId": order.id,
+            },
+        )
+        _dispatch_expo_messages(messages)
+    except Exception as exc:
+        logger.exception("Admin order push failed for order %s: %s", order.id, exc)
+
+
+def send_admin_payment_review_push(session):
+    try:
+        customer = session.user.name if session.user_id else session.guest_name or session.guest_email or "Customer"
+        body = f"{customer} needs manual payment review for PKR {session.total_amount}."
+        messages = _build_push_messages(
+            title="Payment review required",
+            body=body,
+            data={
+                "type": "payment-review",
+                "screen": "payment-review",
+                "sessionId": str(session.public_id),
+            },
+        )
+        _dispatch_expo_messages(messages)
+    except Exception as exc:
+        logger.exception("Admin payment review push failed for session %s: %s", session.public_id, exc)

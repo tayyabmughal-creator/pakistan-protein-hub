@@ -1,3 +1,5 @@
+from unittest.mock import patch
+
 from django.contrib.auth import get_user_model
 from rest_framework import status
 from rest_framework.test import APITestCase
@@ -7,6 +9,7 @@ from products.models import Category, Product
 from promotions.models import Promotion
 from users.models import Address
 from .models import Order, PaymentSession
+from .services import PaymentSessionService
 from django.utils import timezone
 from datetime import timedelta
 
@@ -101,6 +104,17 @@ class OrderApiTests(APITestCase):
         self.assertEqual(str(order.shipping_fee), "250.00")
         self.assertEqual(str(order.total_amount), "4250.00")
         self.assertEqual(self.low_price_product.stock, 9)
+
+    @patch("orders.services.send_admin_new_order_push")
+    def test_create_order_triggers_admin_push_notification(self, mock_push):
+        response = self.client.post(
+            "/api/orders/",
+            {"address_id": self.address.id, "payment_method": "COD"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        mock_push.assert_called_once()
 
     def test_create_order_applies_promotion_discount(self):
         response = self.client.post(
@@ -318,3 +332,25 @@ class AdminPaymentReviewTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.session.refresh_from_db()
         self.assertEqual(self.session.status, "FAILED")
+
+    @patch("orders.services.send_admin_payment_review_push")
+    def test_review_required_notification_is_sent_once(self, mock_push):
+        self.session.status = "PENDING"
+        self.session.save(update_fields=["status"])
+
+        PaymentSessionService.mark_review_required(
+            public_id=self.session.public_id,
+            payload={"payment_status": "captured"},
+            reference="ref-123",
+            tracker="tracker-123",
+        )
+        PaymentSessionService.mark_review_required(
+            public_id=self.session.public_id,
+            payload={"payment_status": "captured"},
+            reference="ref-123",
+            tracker="tracker-123",
+        )
+
+        self.session.refresh_from_db()
+        self.assertEqual(self.session.status, "REVIEW")
+        mock_push.assert_called_once()

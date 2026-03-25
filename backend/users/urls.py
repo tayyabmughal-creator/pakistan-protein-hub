@@ -3,7 +3,7 @@ from .views import (
     RegisterView, UserProfileView, CustomTokenObtainPairView, AddressListCreateView, 
     AddressDetailView, LogoutView, PasswordResetRequestView, PasswordResetConfirmView
 )
-from .views_admin import AdminUserListView, AdminUserDetailView
+from .views_admin import AdminDeviceDeactivateView, AdminDeviceRegisterView, AdminUserListView, AdminUserDetailView
 from rest_framework_simplejwt.views import (
     TokenRefreshView,
 )
@@ -22,4 +22,6 @@ urlpatterns = [
     # Admin URLs
     path('admin/users/', AdminUserListView.as_view(), name='admin-user-list'),
     path('admin/users/<int:pk>/', AdminUserDetailView.as_view(), name='admin-user-detail'),
+    path('admin/mobile/devices/register/', AdminDeviceRegisterView.as_view(), name='admin-device-register'),
+    path('admin/mobile/devices/deactivate/', AdminDeviceDeactivateView.as_view(), name='admin-device-deactivate'),
 ]

@@ -18,7 +18,11 @@ from promotions.models import Promotion
 from users.models import Address
 
 from .models import Order, OrderItem, PaymentSession
-from .notifications import send_order_notifications
+from .notifications import (
+    send_admin_new_order_push,
+    send_admin_payment_review_push,
+    send_order_notifications,
+)
 
 
 def _to_money(value):
@@ -474,6 +478,7 @@ class OrderService:
                     cart.items.all().delete()
 
             send_order_notifications(order)
+            send_admin_new_order_push(order)
             return order
 
     @classmethod
@@ -670,6 +675,7 @@ class PaymentSessionService:
         if session.status == "COMPLETED":
             return session
 
+        should_notify = session.status != "REVIEW"
         session.status = "REVIEW"
         if reference:
             session.gateway_reference = reference
@@ -683,6 +689,8 @@ class PaymentSessionService:
             session.gateway_tracker = tracker
             updated_fields.append("gateway_tracker")
         session.save(update_fields=updated_fields)
+        if should_notify:
+            send_admin_payment_review_push(session)
         return session
 
     @classmethod

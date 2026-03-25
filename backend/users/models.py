@@ -1,5 +1,6 @@
 from django.contrib.auth.models import AbstractUser
 from django.db import models
+from django.utils import timezone
 
 class User(AbstractUser):
     name = models.CharField(max_length=255)
@@ -43,3 +44,31 @@ class Address(models.Model):
 
     def __str__(self):
         return f"{self.full_name} - {self.city}"
+
+
+class AdminDevice(models.Model):
+    PLATFORM_CHOICES = (
+        ("ios", "iOS"),
+        ("android", "Android"),
+        ("unknown", "Unknown"),
+    )
+
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="admin_devices")
+    installation_id = models.CharField(max_length=120, blank=True, default="")
+    expo_push_token = models.CharField(max_length=255, unique=True)
+    device_name = models.CharField(max_length=120, blank=True, default="")
+    platform = models.CharField(max_length=20, choices=PLATFORM_CHOICES, default="unknown")
+    app_version = models.CharField(max_length=40, blank=True, default="")
+    is_active = models.BooleanField(default=True)
+    last_seen_at = models.DateTimeField(default=timezone.now)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        indexes = [
+            models.Index(fields=["user", "is_active"]),
+            models.Index(fields=["installation_id"]),
+        ]
+
+    def __str__(self):
+        return f"{self.user.email} · {self.platform} · {self.device_name or self.expo_push_token}"

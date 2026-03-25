@@ -4,7 +4,7 @@ from rest_framework import serializers
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 
 from orders.models import Order
-from .models import Address
+from .models import Address, AdminDevice
 
 User = get_user_model()
 
@@ -142,6 +142,48 @@ class AdminUserUpdateSerializer(serializers.ModelSerializer):
             if attrs.get("is_staff") is False:
                 raise serializers.ValidationError({"is_staff": "You cannot remove your own staff access."})
         return attrs
+
+
+class AdminDeviceRegistrationSerializer(serializers.Serializer):
+    installation_id = serializers.CharField(max_length=120, required=False, allow_blank=True)
+    expo_push_token = serializers.CharField(max_length=255)
+    device_name = serializers.CharField(max_length=120, required=False, allow_blank=True)
+    platform = serializers.ChoiceField(choices=["ios", "android", "unknown"], required=False, default="unknown")
+    app_version = serializers.CharField(max_length=40, required=False, allow_blank=True)
+
+    def validate_expo_push_token(self, value):
+        token = value.strip()
+        if not token:
+            raise serializers.ValidationError("Push token is required.")
+        return token
+
+
+class AdminDeviceDeactivateSerializer(serializers.Serializer):
+    installation_id = serializers.CharField(max_length=120, required=False, allow_blank=True)
+    expo_push_token = serializers.CharField(max_length=255, required=False, allow_blank=True)
+
+    def validate(self, attrs):
+        if not attrs.get("installation_id") and not attrs.get("expo_push_token"):
+            raise serializers.ValidationError("Provide installation_id or expo_push_token.")
+        return attrs
+
+
+class AdminDeviceSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = AdminDevice
+        fields = (
+            "id",
+            "installation_id",
+            "expo_push_token",
+            "device_name",
+            "platform",
+            "app_version",
+            "is_active",
+            "last_seen_at",
+            "created_at",
+            "updated_at",
+        )
+        read_only_fields = fields
 
 class RegisterSerializer(serializers.ModelSerializer):
     class Meta:

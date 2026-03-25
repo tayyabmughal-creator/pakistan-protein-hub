@@ -1,0 +1,9 @@
+.expo/
+.idea/
+dist/
+android/.gradle/
+android/build/
+android/app/build/
+android/app/google-services.json
+android/app/debug.keystore
+google-services.json

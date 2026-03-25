@@ -8,6 +8,7 @@ from rest_framework.test import APITestCase
 from orders.models import Order, OrderItem
 from products.models import Category, Product
 from users.models import Address
+from users.models import AdminDevice
 
 User = get_user_model()
 
@@ -157,3 +158,42 @@ class AdminUserManagementTests(APITestCase):
         self.customer.refresh_from_db()
         self.assertFalse(self.customer.is_active)
         self.assertFalse(response.data["is_active"])
+
+    def test_admin_can_register_mobile_device_for_push_notifications(self):
+        response = self.client.post(
+            "/api/admin/mobile/devices/register/",
+            {
+                "installation_id": "install-001",
+                "expo_push_token": "ExponentPushToken[test-admin-token]",
+                "platform": "android",
+                "device_name": "Pixel 9 Pro",
+                "app_version": "1.0.0",
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        device = AdminDevice.objects.get(expo_push_token="ExponentPushToken[test-admin-token]")
+        self.assertEqual(device.user, self.admin)
+        self.assertTrue(device.is_active)
+        self.assertEqual(device.installation_id, "install-001")
+
+    def test_admin_can_deactivate_mobile_device(self):
+        AdminDevice.objects.create(
+            user=self.admin,
+            installation_id="install-002",
+            expo_push_token="ExponentPushToken[to-disable]",
+            platform="ios",
+            device_name="iPhone 16",
+        )
+
+        response = self.client.post(
+            "/api/admin/mobile/devices/deactivate/",
+            {"installation_id": "install-002"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["updated"], 1)
+        device = AdminDevice.objects.get(installation_id="install-002")
+        self.assertFalse(device.is_active)
