@@ -34,7 +34,7 @@ jobs:
             cp ~/envs/backend.env.backup backend/.env
             cp ~/envs/frontend.env.backup frontend/.env
 
-            echo "Checking backend environment"
+            echo "Checking environment files"
             test -f backend/.env || (echo "Missing backend/.env" && exit 1)
             test -f frontend/.env || (echo "Missing frontend/.env" && exit 1)
 
@@ -54,16 +54,13 @@ jobs:
             pip install --upgrade pip
             pip install -r requirements.txt
 
-            echo "Validating configured database connection"
-            python manage.py shell -c "from django.conf import settings; db = settings.DATABASES['default']; print(f\"ENGINE={db.get('ENGINE')}\"); print(f\"NAME={db.get('NAME')}\"); print(f\"HOST={db.get('HOST', '')}\")"
-
-            echo "Running backend migrations"
+            echo "Running migrations"
             python manage.py migrate --noinput
 
             echo "Collecting static files"
             python manage.py collectstatic --noinput
 
-            echo "Running Django system checks"
+            echo "Running system checks"
             python manage.py check
 
             echo "Building frontend"
@@ -75,11 +72,11 @@ jobs:
             fi
             npm run build
 
-            echo "Restarting application services"
+            echo "Restarting services"
             sudo systemctl restart ${{ secrets.GUNICORN_SERVICE }}
             sudo systemctl restart ${{ secrets.NGINX_SERVICE }}
 
-            echo "Verifying service status"
+            echo "Checking services"
             sudo systemctl is-active ${{ secrets.GUNICORN_SERVICE }}
             sudo systemctl is-active ${{ secrets.NGINX_SERVICE }}
 
