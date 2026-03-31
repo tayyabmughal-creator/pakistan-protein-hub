@@ -30,6 +30,10 @@ jobs:
             git fetch origin main
             git reset --hard origin/main
 
+            echo "Copying environment files"
+            cp ~/envs/backend.env.backup backend/.env
+            cp ~/envs/frontend.env.backup frontend/.env
+
             echo "Checking backend environment"
             test -f backend/.env || (echo "Missing backend/.env" && exit 1)
             test -f frontend/.env || (echo "Missing frontend/.env" && exit 1)
