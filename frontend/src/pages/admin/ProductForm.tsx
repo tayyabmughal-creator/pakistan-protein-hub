@@ -12,6 +12,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { toast } from "sonner";
 import { createProduct, updateProduct, fetchAdminCategories, fetchAdminProducts } from "@/lib/api";
 import { Upload, X } from "lucide-react";
+import type { Category, Product } from "@/lib/types";
 
 const ProductForm = () => {
     const { id } = useParams();
@@ -19,7 +20,7 @@ const ProductForm = () => {
     const queryClient = useQueryClient();
     const isEdit = !!id;
 
-    const [categories, setCategories] = useState<any[]>([]);
+    const [categories, setCategories] = useState<Category[]>([]);
     const [loading, setLoading] = useState(false);
     const [formData, setFormData] = useState({
         name: "",
@@ -44,7 +45,7 @@ const ProductForm = () => {
 
                 if (isEdit) {
                     const products = await fetchAdminProducts();
-                    const product = products.find((p: any) => p.id === parseInt(id));
+                    const product = products.find((p: Product) => p.id === parseInt(id));
                     if (product) {
                         setFormData({
                             name: product.name,

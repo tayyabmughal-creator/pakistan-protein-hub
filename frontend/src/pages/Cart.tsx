@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Trash2, Plus, Minus, ArrowRight, ShoppingBag } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -10,6 +10,8 @@ import PageHeader from "@/components/PageHeader";
 import { getGuestCartItems, removeGuestCartItem, updateGuestCartItem } from "@/lib/guestCart";
 import { clearAppliedPromoCode, getAppliedPromoCode, setAppliedPromoCode } from "@/lib/promoSession";
 import { Input } from "@/components/ui/input";
+import { getErrorMessage } from "@/lib/errors";
+import type { PromoPreview } from "@/lib/types";
 
 interface CartItem {
     id: number;
@@ -33,11 +35,11 @@ const Cart = () => {
     const [loading, setLoading] = useState(true);
     const [updating, setUpdating] = useState<number | null>(null);
     const [promoCode, setPromoCode] = useState(getAppliedPromoCode());
-    const [promoPreview, setPromoPreview] = useState<any | null>(null);
+    const [promoPreview, setPromoPreview] = useState<PromoPreview | null>(null);
     const [applyingPromo, setApplyingPromo] = useState(false);
     const [hasActiveDeals, setHasActiveDeals] = useState(false);
 
-    const loadCart = async () => {
+    const loadCart = useCallback(async () => {
         try {
             setLoading(true);
             if (user) {
@@ -63,11 +65,11 @@ const Cart = () => {
         } finally {
             setLoading(false);
         }
-    };
+    }, [user]);
 
     useEffect(() => {
         loadCart();
-    }, [user]);
+    }, [loadCart]);
 
     useEffect(() => {
         if (!items.length) {
@@ -154,10 +156,10 @@ const Cart = () => {
             setPromoCode(preview.code);
             setAppliedPromoCode(preview.code);
             toast.success("Promo code applied");
-        } catch (error: any) {
+        } catch (error: unknown) {
             setPromoPreview(null);
             clearAppliedPromoCode();
-            toast.error(error?.response?.data?.error || "Failed to apply promo code");
+            toast.error(getErrorMessage(error, "Failed to apply promo code"));
         } finally {
             setApplyingPromo(false);
         }

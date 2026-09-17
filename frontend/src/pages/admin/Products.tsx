@@ -6,9 +6,11 @@ import { useEffect, useState } from "react";
 import { fetchAdminProducts, deleteProduct, getImageUrl } from "@/lib/api";
 import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
+import { getErrorMessage } from "@/lib/errors";
+import type { Product } from "@/lib/types";
 
 const AdminProducts = () => {
-    const [products, setProducts] = useState<any[]>([]);
+    const [products, setProducts] = useState<Product[]>([]);
     const [loading, setLoading] = useState(true);
     const navigate = useNavigate();
 
@@ -34,10 +36,9 @@ const AdminProducts = () => {
             await deleteProduct(id);
             toast.success("Product deleted successfully");
             loadProducts();
-        } catch (error: any) {
+        } catch (error: unknown) {
             console.error("Delete Error:", error);
-            const msg = error?.message || "Failed to delete product";
-            toast.error(`Error: ${msg}`);
+            toast.error(`Error: ${getErrorMessage(error, "Failed to delete product")}`);
         }
     };
 

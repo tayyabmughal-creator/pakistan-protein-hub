@@ -18,6 +18,7 @@ import AdminLayout from "@/components/admin/AdminLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { fetchAdminDashboard } from "@/lib/api";
 import { useIsMobile } from "@/hooks/use-mobile";
+import type { DashboardOverview, DashboardSummary, LowStockProduct, OrderStatusCount, RecentOrder } from "@/lib/types";
 
 const statusColors: Record<string, string> = {
   PENDING: "#f59e0b",
@@ -28,7 +29,7 @@ const statusColors: Record<string, string> = {
 };
 
 const Dashboard = () => {
-  const [dashboard, setDashboard] = useState<any | null>(null);
+  const [dashboard, setDashboard] = useState<DashboardSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const isMobile = useIsMobile();
 
@@ -44,7 +45,7 @@ const Dashboard = () => {
     load();
   }, []);
 
-  const overview = dashboard?.overview ?? {};
+  const overview: Partial<DashboardOverview> = dashboard?.overview ?? {};
   const statCards = [
     { title: "Total Revenue", value: `Rs. ${Number(overview.total_revenue || 0).toLocaleString()}`, icon: TrendingUp, color: "text-amber-400" },
     { title: "Monthly Revenue", value: `Rs. ${Number(overview.monthly_revenue || 0).toLocaleString()}`, icon: TrendingUp, color: "text-primary" },
@@ -113,7 +114,7 @@ const Dashboard = () => {
                     outerRadius={pieOuterRadius}
                     paddingAngle={4}
                   >
-                    {(dashboard?.order_status_breakdown || []).map((entry: any) => (
+                    {(dashboard?.order_status_breakdown || []).map((entry: OrderStatusCount) => (
                       <Cell key={entry.status} fill={statusColors[entry.status] || "#8884d8"} />
                     ))}
                   </Pie>
@@ -131,7 +132,7 @@ const Dashboard = () => {
             <CardTitle className="font-heading">Recent Orders</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            {(dashboard?.recent_orders || []).map((order: any) => (
+            {(dashboard?.recent_orders || []).map((order: RecentOrder) => (
               <div key={order.id} className="flex flex-col gap-3 rounded-xl border border-border/60 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
                 <div className="min-w-0">
                   <p className="font-medium">#{order.id} · {order.customer_name}</p>
@@ -173,7 +174,7 @@ const Dashboard = () => {
           </CardHeader>
           <CardContent className="space-y-3">
             {(dashboard?.low_stock_products || []).length > 0 ? (
-              dashboard.low_stock_products.map((product: any) => (
+              dashboard.low_stock_products.map((product: LowStockProduct) => (
                 <div key={product.id} className="flex flex-col gap-3 rounded-xl border border-border/60 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
                   <div className="min-w-0">
                     <p className="font-medium">{product.name}</p>

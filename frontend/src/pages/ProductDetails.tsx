@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useParams, useNavigate, useLocation } from "react-router-dom";
 import { Minus, Plus, ShoppingCart, Check, Star } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -18,6 +18,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import Loader from "@/components/Loader";
 import { addGuestCartItem } from "@/lib/guestCart";
+import { getErrorMessage } from "@/lib/errors";
 
 interface Product {
     id: number;
@@ -95,7 +96,7 @@ const ProductDetails = () => {
         loadProduct();
     }, [slug, navigate]);
 
-    const loadReviews = async (productId: number) => {
+    const loadReviews = useCallback(async (productId: number) => {
         try {
             setReviewsLoading(true);
             const data = await fetchReviews(productId);
@@ -105,9 +106,9 @@ const ProductDetails = () => {
         } finally {
             setReviewsLoading(false);
         }
-    };
+    }, []);
 
-    const loadReviewEligibility = async (productId: number) => {
+    const loadReviewEligibility = useCallback(async (productId: number) => {
         if (!user) {
             setReviewEligibility(null);
             setReviewEligibilityLoading(false);
@@ -127,13 +128,13 @@ const ProductDetails = () => {
                 setReviewRating(5);
                 setReviewComment("");
             }
-        } catch (error: any) {
+        } catch (error: unknown) {
             setReviewEligibility(null);
-            toast.error(error.response?.data?.error || "Failed to load review options");
+            toast.error(getErrorMessage(error, "Failed to load review options"));
         } finally {
             setReviewEligibilityLoading(false);
         }
-    };
+    }, [user]);
 
     useEffect(() => {
         if (!product) {
@@ -153,7 +154,7 @@ const ProductDetails = () => {
             setReviewRating(5);
             setReviewComment("");
         }
-    }, [product?.id, user?.id]);
+    }, [product, user, loadReviews, loadReviewEligibility]);
 
     const handleQuantityChange = (delta: number) => {
         setQuantity((prev) => {
@@ -197,8 +198,8 @@ const ProductDetails = () => {
                 icon: <Check className="text-green-500" />,
             });
             setShowViewCart(true);
-        } catch (error: any) {
-            toast.error(error.response?.data?.error || "Failed to add to cart");
+        } catch (error: unknown) {
+            toast.error(getErrorMessage(error, "Failed to add to cart"));
         } finally {
             setAddingToCart(false);
         }
@@ -228,12 +229,8 @@ const ProductDetails = () => {
                 toast.success("Thanks for sharing your review.");
             }
             await Promise.all([loadReviews(product.id), loadReviewEligibility(product.id)]);
-        } catch (error: any) {
-            const message = error.response?.data?.non_field_errors?.[0]
-                || error.response?.data?.detail
-                || error.response?.data?.error
-                || "Could not save your review.";
-            toast.error(message);
+        } catch (error: unknown) {
+            toast.error(getErrorMessage(error, "Could not save your review."));
         } finally {
             setSubmittingReview(false);
         }
@@ -241,7 +238,6 @@ const ProductDetails = () => {
 
     const handleDeleteReview = async () => {
         if (!product || !reviewEligibility?.review) return;
-        // eslint-disable-next-line
         if (!confirm("Delete your review for this product?")) return;
 
         try {
@@ -251,8 +247,8 @@ const ProductDetails = () => {
             setReviewRating(5);
             setReviewComment("");
             await Promise.all([loadReviews(product.id), loadReviewEligibility(product.id)]);
-        } catch (error: any) {
-            toast.error(error.response?.data?.detail || "Could not delete your review.");
+        } catch (error: unknown) {
+            toast.error(getErrorMessage(error, "Could not delete your review."));
         } finally {
             setDeletingReview(false);
         }

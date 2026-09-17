@@ -1,5 +1,7 @@
 import apiClient from "./apiClient";
 import { API_ROOT_URL } from "./config";
+import { getErrorMessage } from "./errors";
+import type { Address, Category, HomePageSettings, Promotion } from "./types";
 
 export const fetchProducts = async (filters?: { category_slug?: string | null; search?: string | null }) => {
     const params = new URLSearchParams();
@@ -116,7 +118,7 @@ export const fetchAddresses = async () => {
     return response.data;
 };
 
-export const createAddress = async (data: any) => {
+export const createAddress = async (data: Partial<Address>) => {
     const response = await apiClient.post("/users/addresses/", data);
     return response.data;
 };
@@ -227,8 +229,11 @@ export const deleteProduct = async (id: number) => {
     try {
         await apiClient.delete(`/admin/products/${id}/`);
         return null;
-    } catch (error: any) {
-        throw error.response?.data || error;
+    } catch (error: unknown) {
+        // Throw a real Error: callers read `error.message`, which was always
+        // undefined on the raw response body this used to rethrow, so the
+        // server's actual reason never reached the user.
+        throw new Error(getErrorMessage(error, "Failed to delete product"));
     }
 };
 
@@ -238,7 +243,7 @@ export const fetchAdminCategories = async () => {
     return response.data;
 };
 
-export const createCategory = async (data: any) => {
+export const createCategory = async (data: FormData | Partial<Category>) => {
     const isFormData = data instanceof FormData;
     const config = isFormData ? { headers: { "Content-Type": "multipart/form-data" } } : {};
 
@@ -246,7 +251,7 @@ export const createCategory = async (data: any) => {
     return response.data;
 };
 
-export const updateCategory = async (id: number, data: any) => {
+export const updateCategory = async (id: number, data: FormData | Partial<Category>) => {
     const isFormData = data instanceof FormData;
     const config = isFormData ? { headers: { "Content-Type": "multipart/form-data" } } : {};
 
@@ -258,8 +263,8 @@ export const deleteCategory = async (id: number) => {
     try {
         await apiClient.delete(`/admin/categories/${id}/`);
         return null;
-    } catch (error: any) {
-        throw error.response?.data || error;
+    } catch (error: unknown) {
+        throw new Error(getErrorMessage(error, "Failed to delete category"));
     }
 };
 
@@ -279,12 +284,12 @@ export const fetchAdminPromotions = async () => {
     return response.data;
 };
 
-export const createPromotion = async (data: any) => {
+export const createPromotion = async (data: Partial<Promotion>) => {
     const response = await apiClient.post("/admin/promotions/", data);
     return response.data;
 };
 
-export const updatePromotion = async (id: number, data: any) => {
+export const updatePromotion = async (id: number, data: Partial<Promotion>) => {
     const response = await apiClient.patch(`/admin/promotions/${id}/`, data);
     return response.data;
 };
@@ -304,7 +309,7 @@ export const fetchAdminHomePageSettings = async () => {
     return response.data;
 };
 
-export const updateAdminHomePageSettings = async (data: any) => {
+export const updateAdminHomePageSettings = async (data: Partial<HomePageSettings>) => {
     const response = await apiClient.put("/admin/homepage-settings/", data);
     return response.data;
 };
@@ -315,7 +320,7 @@ export const downloadAdminReport = async (reportKey: "orders" | "customers" | "i
     });
 
     const contentDisposition = response.headers["content-disposition"] as string | undefined;
-    const matchedFileName = contentDisposition?.match(/filename=\"?([^"]+)\"?$/)?.[1] || `${reportKey}-report.csv`;
+    const matchedFileName = contentDisposition?.match(/filename="?([^"]+)"?$/)?.[1] || `${reportKey}-report.csv`;
     const blobUrl = window.URL.createObjectURL(new Blob([response.data]));
     const link = document.createElement("a");
     link.href = blobUrl;

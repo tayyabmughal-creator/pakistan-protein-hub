@@ -26,11 +26,12 @@ import {
 } from "@/components/ui/dialog";
 import { ORDER_FLOW, ORDER_STATUS_META, getAllowedNextStatuses, getOrderProgressIndex, getOrderStatusMeta, isStatusRollback, requiresStatusConfirmation } from "@/lib/orderStatus";
 import { cn } from "@/lib/utils";
+import type { Order, OrderItem, OrderStatus } from "@/lib/types";
 
 const AdminOrders = () => {
-    const [orders, setOrders] = useState<any[]>([]);
+    const [orders, setOrders] = useState<Order[]>([]);
     const [loading, setLoading] = useState(true);
-    const [selectedOrder, setSelectedOrder] = useState<any | null>(null);
+    const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
     const [statusFilter, setStatusFilter] = useState<string>("ALL");
     const [pendingStatusChange, setPendingStatusChange] = useState<{ id: number; customerName: string; currentStatus: string; nextStatus: string } | null>(null);
 
@@ -88,7 +89,7 @@ const AdminOrders = () => {
 
     const selectedOrderItemTotal = useMemo(() => {
         if (!selectedOrder?.items?.length) return 0;
-        return selectedOrder.items.reduce((total: number, item: any) => total + Number(item.price) * Number(item.quantity), 0);
+        return selectedOrder.items.reduce((total: number, item: OrderItem) => total + Number(item.price) * Number(item.quantity), 0);
     }, [selectedOrder]);
 
     const selectedOrderProgress = useMemo(() => {
@@ -133,7 +134,7 @@ const AdminOrders = () => {
         `;
     };
 
-    const handlePrintOrder = (order: any) => {
+    const handlePrintOrder = (order: Order) => {
         const printWindow = window.open("", "_blank", "width=900,height=700");
         if (!printWindow) {
             toast.error("Pop-up blocked. Allow pop-ups to print the order slip.");
@@ -141,7 +142,7 @@ const AdminOrders = () => {
         }
 
         const orderItemTotal = order.items?.length
-            ? order.items.reduce((total: number, item: any) => total + Number(item.price) * Number(item.quantity), 0)
+            ? order.items.reduce((total: number, item: OrderItem) => total + Number(item.price) * Number(item.quantity), 0)
             : 0;
         const printedAt = formatDate(new Date().toISOString());
         const codAmount = order.payment_method === "COD" ? formatMoney(order.total_amount) : "N/A";
@@ -149,7 +150,7 @@ const AdminOrders = () => {
         const barcodeSvg = buildReferenceBarcodeSvg(orderReference);
 
         const itemRows = order.items?.length
-            ? order.items.map((item: any) => `
+            ? order.items.map((item: OrderItem) => `
                 <tr>
                     <td>#${escapeHtml(item.id)}</td>
                     <td>${escapeHtml(item.product || "Deleted")}</td>
@@ -336,7 +337,7 @@ const AdminOrders = () => {
         printWindow.print();
     };
 
-    const handleStatusSelect = (order: any, status: string) => {
+    const handleStatusSelect = (order: Order, status: string) => {
         if (status === order.status) return;
         if (requiresStatusConfirmation(order.status, status)) {
             setPendingStatusChange({
@@ -644,7 +645,7 @@ const AdminOrders = () => {
                                 {selectedOrder.items?.length ? (
                                     <>
                                         <div className="space-y-3 md:hidden">
-                                            {selectedOrder.items.map((item: any) => (
+                                            {selectedOrder.items.map((item: OrderItem) => (
                                                 <div key={item.id} className="rounded-xl border border-border/50 p-3">
                                                     <div className="flex items-start justify-between gap-3">
                                                         <div className="min-w-0">
@@ -683,7 +684,7 @@ const AdminOrders = () => {
                                                     </TableRow>
                                                 </TableHeader>
                                                 <TableBody>
-                                                    {selectedOrder.items.map((item: any) => (
+                                                    {selectedOrder.items.map((item: OrderItem) => (
                                                         <TableRow key={item.id} className="border-border">
                                                             <TableCell>#{item.id}</TableCell>
                                                             <TableCell>{item.product || "Deleted"}</TableCell>

@@ -7,12 +7,14 @@ import { Label } from "@/components/ui/label";
 import PageHeader from "@/components/PageHeader";
 import Loader from "@/components/Loader";
 import { toast } from "sonner";
+import { getErrorMessage } from "@/lib/errors";
+import type { Order, OrderItem } from "@/lib/types";
 
 const GuestOrderLookup = () => {
     const [orderId, setOrderId] = useState("");
     const [email, setEmail] = useState("");
     const [phoneNumber, setPhoneNumber] = useState("");
-    const [order, setOrder] = useState<any | null>(null);
+    const [order, setOrder] = useState<Order | null>(null);
     const [loading, setLoading] = useState(false);
 
     const handleSubmit = async (event: FormEvent) => {
@@ -27,8 +29,8 @@ const GuestOrderLookup = () => {
                 phone_number: phoneNumber || undefined,
             });
             setOrder(data);
-        } catch (error: any) {
-            toast.error(error.response?.data?.error || "Order not found");
+        } catch (error: unknown) {
+            toast.error(getErrorMessage(error, "Order not found"));
         } finally {
             setLoading(false);
         }
@@ -85,7 +87,7 @@ const GuestOrderLookup = () => {
                             <div>
                                 <p className="text-sm text-muted-foreground">Items</p>
                                 <ul className="space-y-2">
-                                    {order.items.map((item: any) => (
+                                    {order.items.map((item: OrderItem) => (
                                         <li key={item.id} className="flex justify-between text-sm">
                                             <span>{item.quantity} x {item.product_name}</span>
                                             <span>PKR {Number(item.price).toLocaleString()}</span>

@@ -20,9 +20,15 @@ apiClient.interceptors.request.use(
     (error) => Promise.reject(error)
 );
 
-// Flag to prevent multiple concurrent refresh calls
+// Requests that arrived while a token refresh was already in flight. They are
+// resolved with the new token, or rejected with whatever broke the refresh.
+type QueuedRequest = {
+    resolve: (token: string | null) => void;
+    reject: (reason?: unknown) => void;
+};
+
 let isRefreshing = false;
-let failedQueue: any[] = [];
+let failedQueue: QueuedRequest[] = [];
 
 const AUTH_REDIRECT_EXCLUDED_PATHS = new Set([
     "/users/login/",
@@ -32,7 +38,7 @@ const AUTH_REDIRECT_EXCLUDED_PATHS = new Set([
     "/users/token/refresh/",
 ]);
 
-const processQueue = (error: any, token: string | null = null) => {
+const processQueue = (error: unknown, token: string | null = null) => {
     failedQueue.forEach((prom) => {
         if (error) {
             prom.reject(error);

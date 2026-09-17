@@ -6,6 +6,7 @@ import { Skeleton } from "./ui/skeleton";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "@/context/AuthContext";
 import { toast } from "@/hooks/use-toast";
+import type { Product } from "@/lib/types";
 
 const FeaturedProducts = () => {
   const { user } = useAuth();
@@ -36,7 +37,7 @@ const FeaturedProducts = () => {
   });
 
   const handleAddToCart = async (id: number) => {
-    const product = products.find((entry: any) => entry.id === id);
+    const product = products.find((entry: Product) => entry.id === id);
     if (!product) return;
 
     if (!user) {
@@ -85,7 +86,7 @@ const FeaturedProducts = () => {
               <Skeleton key={i} className="h-[450px] w-full rounded-2xl bg-[#111]" />
             ))
           ) : products.length > 0 ? (
-            products.map((product: any, index: number) => (
+            products.map((product: Product, index: number) => (
               <div key={product.id} className="animate-fade-in" style={{ animationDelay: `${index * 0.1}s` }}>
                 <ProductCard {...product} onAddToCart={handleAddToCart} />
               </div>

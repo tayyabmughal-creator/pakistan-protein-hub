@@ -7,6 +7,7 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { toast } from "sonner";
 import { UserPlus, Loader2, ArrowRight } from "lucide-react";
 import apiClient from "@/lib/apiClient";
+import { getErrorMessage } from "@/lib/errors";
 
 const Register = () => {
     const [name, setName] = useState("");
@@ -25,13 +26,8 @@ const Register = () => {
                 description: "Please login with your new account."
             });
             navigate("/login");
-        } catch (error: any) {
-            const message =
-                error.response?.data?.email?.[0] ||
-                error.response?.data?.password?.[0] ||
-                error.response?.data?.name?.[0] ||
-                "Registration failed";
-            toast.error(message);
+        } catch (error: unknown) {
+            toast.error(getErrorMessage(error, "Registration failed"));
         } finally {
             setLoading(false);
         }

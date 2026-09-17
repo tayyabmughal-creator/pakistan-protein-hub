@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Check, Plus, MapPin, Truck, CreditCard } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -23,6 +23,8 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { saveGuestOrderConfirmation } from "@/lib/guestOrderSession";
 import { clearAppliedPromoCode, getAppliedPromoCode } from "@/lib/promoSession";
+import { getErrorMessage } from "@/lib/errors";
+import type { CartItem, PromoPreview } from "@/lib/types";
 
 interface Address {
     id: number;
@@ -65,7 +67,7 @@ const Checkout = () => {
     const [selectedAddressId, setSelectedAddressId] = useState<number | null>(null);
     const [showAddressForm, setShowAddressForm] = useState(false);
     const [placingOrder, setPlacingOrder] = useState(false);
-    const [promoPreview, setPromoPreview] = useState<any | null>(null);
+    const [promoPreview, setPromoPreview] = useState<PromoPreview | null>(null);
     const [hasActiveDeals, setHasActiveDeals] = useState(false);
     const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>([]);
     const [selectedPaymentMethod, setSelectedPaymentMethod] = useState("COD");
@@ -127,7 +129,7 @@ const Checkout = () => {
         return Object.keys(errors).length === 0;
     };
 
-    const loadData = async () => {
+    const loadData = useCallback(async () => {
         try {
             setLoading(true);
             const cartData = user
@@ -145,7 +147,7 @@ const Checkout = () => {
                 return;
             }
 
-            const subtotal = cartData.items.reduce((sum: number, item: any) => {
+            const subtotal = cartData.items.reduce((sum: number, item: CartItem) => {
                 const price = parseFloat(item.product.final_price || item.product.price);
                 return sum + (price * item.quantity);
             }, 0);
@@ -168,7 +170,7 @@ const Checkout = () => {
                 try {
                     const preview = await previewPromotion({
                         promo_code: storedPromo,
-                        items: user ? undefined : cartData.items.map((item: any) => ({ product_id: item.product.id, quantity: item.quantity })),
+                        items: user ? undefined : cartData.items.map((item: CartItem) => ({ product_id: item.product.id, quantity: item.quantity })),
                     });
                     setPromoPreview(preview);
                 } catch {
@@ -201,11 +203,11 @@ const Checkout = () => {
         } finally {
             setLoading(false);
         }
-    };
+    }, [user, navigate]);
 
     useEffect(() => {
         loadData();
-    }, [user]);
+    }, [loadData]);
 
     const handlePlaceOrder = async () => {
         try {
@@ -296,10 +298,9 @@ const Checkout = () => {
             }
             clearAppliedPromoCode();
             toast.success("Order placed successfully!");
-        } catch (error: any) {
+        } catch (error: unknown) {
             console.error("Order placement error:", error);
-            const errorMessage = error.response?.data?.error || error.response?.data?.detail || "Failed to place order. Please try again.";
-            toast.error(errorMessage);
+            toast.error(getErrorMessage(error, "Failed to place order. Please try again."));
         } finally {
             setPlacingOrder(false);
         }

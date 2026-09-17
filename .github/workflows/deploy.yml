@@ -6,7 +6,14 @@ on:
       - main
 
 jobs:
+  # Nothing reaches the VPS unless every gate passes. This used to deploy
+  # straight from a push with no tests, no lint, no typecheck and no secret scan.
+  ci:
+    name: CI gate
+    uses: ./.github/workflows/ci.yml
+
   deploy:
+    needs: ci
     runs-on: ubuntu-latest
 
     steps:
@@ -26,13 +33,47 @@ jobs:
             echo "Going to project folder"
             cd ${{ secrets.PROJECT_PATH }}
 
-            echo "Resetting server repo to origin/main"
-            git fetch origin main
-            git reset --hard origin/main
-
             echo "Checking backend environment"
             test -f backend/.env || (echo "Missing backend/.env" && exit 1)
             test -f frontend/.env || (echo "Missing frontend/.env" && exit 1)
+
+            # --- Pre-deploy backup -------------------------------------------
+            # `git reset --hard` below overwrites the working tree. Anything
+            # tracked is replaced with the committed copy, and anything removed
+            # from the index in the incoming commit is DELETED. backend/db.sqlite3
+            # is no longer tracked, so a SQLite deployment would lose its database
+            # on the first deploy after that change. Back up first, every time.
+            echo "Taking a pre-deploy backup"
+            BACKUP_DIR="${HOME}/paknutrition-backups"
+            mkdir -p "$BACKUP_DIR"
+            STAMP="$(date -u +%Y%m%dT%H%M%SZ)"
+
+            if [ -f backend/db.sqlite3 ]; then
+              cp backend/db.sqlite3 "$BACKUP_DIR/db.sqlite3.$STAMP"
+              echo "Backed up backend/db.sqlite3 to $BACKUP_DIR/db.sqlite3.$STAMP"
+            fi
+
+            # shellcheck disable=SC1091
+            set -a; . backend/.env; set +a
+            if [ -n "${POSTGRES_DB:-}" ]; then
+              echo "Backing up PostgreSQL database ${POSTGRES_DB}"
+              PGPASSWORD="${POSTGRES_PASSWORD}" pg_dump \
+                -h "${POSTGRES_HOST:-localhost}" -p "${POSTGRES_PORT:-5432}" \
+                -U "${POSTGRES_USER}" -d "${POSTGRES_DB}" -Fc \
+                -f "$BACKUP_DIR/paknutrition.$STAMP.dump"
+              echo "Backed up to $BACKUP_DIR/paknutrition.$STAMP.dump"
+            else
+              echo "WARNING: POSTGRES_DB is not set — this deployment is on SQLite."
+            fi
+
+            # Keep the 14 most recent of each kind.
+            ls -1t "$BACKUP_DIR"/paknutrition.*.dump 2>/dev/null | tail -n +15 | xargs -r rm -f
+            ls -1t "$BACKUP_DIR"/db.sqlite3.* 2>/dev/null | tail -n +15 | xargs -r rm -f
+            # ------------------------------------------------------------------
+
+            echo "Resetting server repo to origin/main"
+            git fetch origin main
+            git reset --hard origin/main
 
             echo "Setting up backend virtual environment"
             cd backend

@@ -10,8 +10,22 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { createPromotion, deletePromotion, fetchAdminPromotions, updatePromotion } from "@/lib/api";
+import type { Promotion } from "@/lib/types";
+import { getErrorMessage } from "@/lib/errors";
 
-const emptyForm = {
+/** The dialog's editable fields. Dates are datetime-local strings, not ISO. */
+type PromotionForm = {
+  code: string;
+  description: string;
+  discount_percentage: number;
+  valid_from: string;
+  valid_to: string;
+  active: boolean;
+  usage_limit: number;
+  used_count: number;
+};
+
+const emptyForm: PromotionForm = {
   code: "",
   description: "",
   discount_percentage: 10,
@@ -28,12 +42,12 @@ const toDateTimeLocal = (value?: string) => {
 };
 
 const Promotions = () => {
-  const [promotions, setPromotions] = useState<any[]>([]);
+  const [promotions, setPromotions] = useState<Promotion[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const [editingPromotion, setEditingPromotion] = useState<any | null>(null);
-  const [form, setForm] = useState<any>(emptyForm);
+  const [editingPromotion, setEditingPromotion] = useState<Promotion | null>(null);
+  const [form, setForm] = useState<PromotionForm>(emptyForm);
 
   const loadPromotions = async () => {
     try {
@@ -50,7 +64,7 @@ const Promotions = () => {
     loadPromotions();
   }, []);
 
-  const openDialog = (promotion?: any) => {
+  const openDialog = (promotion?: Promotion) => {
     if (promotion) {
       setEditingPromotion(promotion);
       setForm({
@@ -96,14 +110,8 @@ const Promotions = () => {
 
       setIsDialogOpen(false);
       loadPromotions();
-    } catch (error: any) {
-      const detail =
-        error?.response?.data?.code?.[0] ||
-        error?.response?.data?.discount_percentage?.[0] ||
-        error?.response?.data?.valid_to?.[0] ||
-        error?.response?.data?.detail ||
-        "Failed to save deal";
-      toast.error(detail);
+    } catch (error: unknown) {
+      toast.error(getErrorMessage(error, "Failed to save deal"));
     } finally {
       setSaving(false);
     }
@@ -256,35 +264,35 @@ const Promotions = () => {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label>Code</Label>
-                <Input value={form.code} onChange={(e) => setForm((prev: any) => ({ ...prev, code: e.target.value }))} required />
+                <Input value={form.code} onChange={(e) => setForm((prev) => ({ ...prev, code: e.target.value }))} required />
               </div>
               <div className="space-y-2">
                 <Label>Discount Percentage</Label>
-                <Input type="number" min="1" max="100" value={form.discount_percentage} onChange={(e) => setForm((prev: any) => ({ ...prev, discount_percentage: e.target.value }))} required />
+                <Input type="number" min="1" max="100" value={form.discount_percentage} onChange={(e) => setForm((prev) => ({ ...prev, discount_percentage: Number(e.target.value) }))} required />
               </div>
             </div>
             <div className="space-y-2">
               <Label>Description</Label>
-              <Textarea value={form.description} onChange={(e) => setForm((prev: any) => ({ ...prev, description: e.target.value }))} />
+              <Textarea value={form.description} onChange={(e) => setForm((prev) => ({ ...prev, description: e.target.value }))} />
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label>Valid From</Label>
-                <Input type="datetime-local" value={form.valid_from} onChange={(e) => setForm((prev: any) => ({ ...prev, valid_from: e.target.value }))} required />
+                <Input type="datetime-local" value={form.valid_from} onChange={(e) => setForm((prev) => ({ ...prev, valid_from: e.target.value }))} required />
               </div>
               <div className="space-y-2">
                 <Label>Valid To</Label>
-                <Input type="datetime-local" value={form.valid_to} onChange={(e) => setForm((prev: any) => ({ ...prev, valid_to: e.target.value }))} required />
+                <Input type="datetime-local" value={form.valid_to} onChange={(e) => setForm((prev) => ({ ...prev, valid_to: e.target.value }))} required />
               </div>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label>Usage Limit</Label>
-                <Input type="number" min="1" value={form.usage_limit} onChange={(e) => setForm((prev: any) => ({ ...prev, usage_limit: e.target.value }))} required />
+                <Input type="number" min="1" value={form.usage_limit} onChange={(e) => setForm((prev) => ({ ...prev, usage_limit: Number(e.target.value) }))} required />
               </div>
               <div className="space-y-2">
                 <Label>Used Count</Label>
-                <Input type="number" min="0" value={form.used_count} onChange={(e) => setForm((prev: any) => ({ ...prev, used_count: e.target.value }))} required />
+                <Input type="number" min="0" value={form.used_count} onChange={(e) => setForm((prev) => ({ ...prev, used_count: Number(e.target.value) }))} required />
               </div>
             </div>
             <div className="flex flex-col gap-3 rounded-xl border border-border/60 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
@@ -292,7 +300,7 @@ const Promotions = () => {
                 <p className="font-medium">Active</p>
                 <p className="text-sm text-muted-foreground">Inactive deals stay saved but are hidden from customers.</p>
               </div>
-              <Switch checked={!!form.active} onCheckedChange={(checked) => setForm((prev: any) => ({ ...prev, active: checked }))} />
+              <Switch checked={!!form.active} onCheckedChange={(checked) => setForm((prev) => ({ ...prev, active: checked }))} />
             </div>
             <DialogFooter className="gap-2">
               <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>Cancel</Button>

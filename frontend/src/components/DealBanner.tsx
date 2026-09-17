@@ -1,14 +1,23 @@
 import { Timer } from "lucide-react";
 import { Button } from "./ui/button";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { Link } from "react-router-dom";
+import type { HomePageSettings } from "@/lib/types";
 
-const DealBanner = ({ settings }: { settings?: any }) => {
-  const targetDate = settings?.effective_deal_target_date
-    ? new Date(settings.effective_deal_target_date)
-    : settings?.deal_target_date
-    ? new Date(settings.deal_target_date)
-    : new Date(Date.now() + 20 * 24 * 60 * 60 * 1000);
+const DealBanner = ({ settings }: { settings?: HomePageSettings }) => {
+  // Memoised because this is an effect dependency: a fresh Date on every
+  // render tore down and recreated the one-second countdown interval each time.
+  const targetDate = useMemo(() => {
+    if (settings?.effective_deal_target_date) {
+      return new Date(settings.effective_deal_target_date);
+    }
+    if (settings?.deal_target_date) {
+      return new Date(settings.deal_target_date);
+    }
+    // TODO(phase-3): with no configured date this invents a 20-day countdown.
+    // An unconfigured deal should not display a fabricated deadline.
+    return new Date(Date.now() + 20 * 24 * 60 * 60 * 1000);
+  }, [settings?.effective_deal_target_date, settings?.deal_target_date]);
   const isEnabled = settings?.deal_enabled ?? true;
   const [isExpired, setIsExpired] = useState(settings?.deal_is_expired ?? targetDate.getTime() <= Date.now());
   const [timeLeft, setTimeLeft] = useState({

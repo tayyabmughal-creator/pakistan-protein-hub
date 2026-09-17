@@ -1,11 +1,22 @@
-Django>=4.2
-djangorestframework
-django-cors-headers
-djangorestframework-simplejwt
-django-filter
-drf-spectacular
-Pillow
-psycopg2-binary
-python-dotenv
-gunicorn
-whitenoise
+# Runtime dependencies, pinned.
+#
+# These were previously unpinned (`Django>=4.2`, everything else bare), which
+# meant the production deploy — `pip install -r requirements.txt` on the VPS —
+# installed whatever PyPI happened to serve that day. A machine here resolved
+# Django 4.2.16 while a fresh install resolved 5.2.17 from the same file.
+#
+# Bump deliberately, in a commit of its own, with CI green.
+
+Django==5.2.17
+djangorestframework==3.18.1
+djangorestframework-simplejwt==5.5.1
+django-cors-headers==4.9.0
+django-filter==26.1
+drf-spectacular==0.30.0
+
+Pillow==12.3.0
+psycopg2-binary==2.9.13
+python-dotenv==1.2.3
+
+gunicorn==26.2.0
+whitenoise==6.12.0

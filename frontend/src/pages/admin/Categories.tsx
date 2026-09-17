@@ -14,12 +14,14 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { getErrorMessage } from "@/lib/errors";
+import type { Category } from "@/lib/types";
 
 const AdminCategories = () => {
-    const [categories, setCategories] = useState<any[]>([]);
+    const [categories, setCategories] = useState<Category[]>([]);
     const [loading, setLoading] = useState(true);
     const [isDialogOpen, setIsDialogOpen] = useState(false);
-    const [editingCategory, setEditingCategory] = useState<any | null>(null);
+    const [editingCategory, setEditingCategory] = useState<Category | null>(null);
     const [formData, setFormData] = useState({ name: "", slug: "" });
     const [saving, setSaving] = useState(false);
 
@@ -40,7 +42,7 @@ const AdminCategories = () => {
         loadCategories();
     }, []);
 
-    const handleOpenDialog = (category?: any) => {
+    const handleOpenDialog = (category?: Category) => {
         if (category) {
             setEditingCategory(category);
             setFormData({ name: category.name, slug: category.slug });
@@ -73,10 +75,9 @@ const AdminCategories = () => {
             }
             setIsDialogOpen(false);
             loadCategories();
-        } catch (error: any) {
+        } catch (error: unknown) {
             console.error("Save Error:", error);
-            const msg = error?.message || "Failed to save category";
-            toast.error(`Error: ${msg}`);
+            toast.error(`Error: ${getErrorMessage(error, "Failed to save category")}`);
         } finally {
             setSaving(false);
         }
@@ -89,10 +90,9 @@ const AdminCategories = () => {
             await deleteCategory(id);
             toast.success("Category deleted");
             loadCategories();
-        } catch (error: any) {
+        } catch (error: unknown) {
             console.error("Delete Error:", error);
-            const msg = error?.message || "Failed to delete category";
-            toast.error(`Error: ${msg}`);
+            toast.error(`Error: ${getErrorMessage(error, "Failed to delete category")}`);
         }
     };
 

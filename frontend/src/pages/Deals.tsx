@@ -4,6 +4,7 @@ import { fetchHomePageSettings, fetchPromotions } from "@/lib/api";
 import Loader from "@/components/Loader";
 import { Button } from "@/components/ui/button";
 import { Link } from "react-router-dom";
+import type { Promotion } from "@/lib/types";
 
 const Deals = () => {
     const { data, isLoading, isError } = useQuery({
@@ -84,7 +85,7 @@ const Deals = () => {
                     </div>
                 ) : (
                     <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-                        {promotions.map((promotion: any) => (
+                        {promotions.map((promotion: Promotion) => (
                             <div
                                 key={promotion.id}
                                 className="rounded-2xl border border-white/10 bg-[#111] p-6 shadow-xl"

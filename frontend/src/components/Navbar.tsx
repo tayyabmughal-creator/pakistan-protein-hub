@@ -14,6 +14,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { fetchCart, fetchProducts, getImageUrl } from "@/lib/api";
 import { useQuery } from "@tanstack/react-query";
 import { getGuestCartCount, subscribeToGuestCartUpdates } from "@/lib/guestCart";
+import type { CartItem, Product } from "@/lib/types";
 
 // Hook for debouncing
 function useDebounce<T>(value: T, delay: number): T {
@@ -157,7 +158,7 @@ const Navbar = () => {
                       <div className="py-2 px-3 text-xs font-semibold text-gray-500 uppercase tracking-wider border-b border-white/5">
                         Products
                       </div>
-                      {searchResults.map((product: any) => (
+                      {searchResults.map((product: Product) => (
                         <div
                           key={product.id}
                           onClick={() => {
@@ -250,7 +251,7 @@ const Navbar = () => {
               <Button variant="ghost" size="icon" className="relative text-muted-foreground hover:text-primary">
                 <ShoppingCart className="w-5 h-5" />
                 <span className="absolute top-1 right-1 w-4 h-4 bg-primary text-[10px] font-bold text-primary-foreground flex items-center justify-center rounded-full">
-                  {user ? (cartItems?.items?.reduce((total: number, item: any) => total + item.quantity, 0) || 0) : guestCartCount}
+                  {user ? (cartItems?.items?.reduce((total: number, item: CartItem) => total + item.quantity, 0) || 0) : guestCartCount}
                 </span>
               </Button>
             </Link>

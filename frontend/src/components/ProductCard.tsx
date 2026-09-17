@@ -7,9 +7,11 @@ interface ProductCardProps {
   id: number;
   name: string;
   brand: string;
-  price: number;
-  discount_price?: number | null;
-  final_price?: number;
+  // DRF serialises DecimalField as a string, so every money prop arrives as a
+  // string from the API even though literals in this codebase are numbers.
+  price: number | string;
+  discount_price?: number | string | null;
+  final_price?: number | string;
   sale_percentage?: number;
   should_show_sale_badge?: boolean;
   image: string | null;
@@ -21,8 +23,8 @@ interface ProductCardProps {
 
 const ProductCard = ({ id, name, brand, price, discount_price, final_price, sale_percentage = 0, should_show_sale_badge = false, image, badge, slug, stock = 0, onAddToCart }: ProductCardProps) => {
   const [loading, setLoading] = useState(false);
-  const displayPrice = final_price || discount_price || price;
-  const originalPrice = (discount_price || final_price) ? price : undefined;
+  const displayPrice = Number(final_price || discount_price || price);
+  const originalPrice = (discount_price || final_price) ? Number(price) : undefined;
 
   const formatPrice = (p: number) => {
     return new Intl.NumberFormat('en-PK', {

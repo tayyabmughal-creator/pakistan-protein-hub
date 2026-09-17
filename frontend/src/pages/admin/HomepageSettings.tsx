@@ -9,11 +9,13 @@ import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { fetchAdminHomePageSettings, fetchAdminPromotions, updateAdminHomePageSettings } from "@/lib/api";
 import { toast } from "sonner";
+import type { HomePageSettings, Promotion } from "@/lib/types";
+import { getErrorMessage } from "@/lib/errors";
 
 const HomepageSettings = () => {
   const queryClient = useQueryClient();
-  const [form, setForm] = useState<any | null>(null);
-  const [promotions, setPromotions] = useState<any[]>([]);
+  const [form, setForm] = useState<HomePageSettings | null>(null);
+  const [promotions, setPromotions] = useState<Promotion[]>([]);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
@@ -41,8 +43,8 @@ const HomepageSettings = () => {
     );
   }
 
-  const updateField = (field: string, value: string) => {
-    setForm((prev: any) => ({ ...prev, [field]: value }));
+  const updateField = (field: keyof HomePageSettings, value: string | boolean) => {
+    setForm((prev) => ({ ...prev, [field]: value }));
   };
 
   const normalizeUrl = (value: string) => {
@@ -67,16 +69,11 @@ const HomepageSettings = () => {
       setForm(payload);
       queryClient.invalidateQueries({ queryKey: ["homepage-settings"] });
       toast.success("Homepage settings saved");
-    } catch (error: any) {
-      const detail =
-        error?.response?.data?.featured_promotion_id?.[0] ||
-        error?.response?.data?.facebook_url?.[0] ||
-        error?.response?.data?.instagram_url?.[0] ||
-        error?.response?.data?.tiktok_url?.[0] ||
-        error?.response?.data?.youtube_url?.[0] ||
-        error?.response?.data?.detail ||
-        "Failed to save homepage settings";
-      toast.error(detail);
+    } catch (error: unknown) {
+      // getErrorMessage already surfaces DRF field errors, so the per-field
+      // ladder this replaced is no longer needed — and it covers the fields
+      // that ladder had not been updated to include.
+      toast.error(getErrorMessage(error, "Failed to save homepage settings"));
     } finally {
       setSaving(false);
     }
@@ -120,11 +117,11 @@ const HomepageSettings = () => {
             <CardTitle className="font-heading">Homepage Stats</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            {[
+            {([
               ["hero_stat_one_value", "hero_stat_one_label", "Stat One"],
               ["hero_stat_two_value", "hero_stat_two_label", "Stat Two"],
               ["hero_stat_three_value", "hero_stat_three_label", "Stat Three"],
-            ].map(([valueField, labelField, heading]) => (
+            ] as const).map(([valueField, labelField, heading]) => (
               <div key={valueField} className="rounded-xl border border-border/60 p-4 space-y-3">
                 <p className="font-medium">{heading}</p>
                 <Input value={form[valueField]} onChange={(e) => updateField(valueField, e.target.value)} placeholder="Value" />
@@ -151,7 +148,7 @@ const HomepageSettings = () => {
                 <p className="font-medium">Show sale on homepage</p>
                 <p className="text-sm text-muted-foreground">Turn this off to hide the sale section completely.</p>
               </div>
-              <Switch checked={!!form.deal_enabled} onCheckedChange={(checked) => setForm((prev: any) => ({ ...prev, deal_enabled: checked }))} />
+              <Switch checked={!!form.deal_enabled} onCheckedChange={(checked) => setForm((prev) => ({ ...prev, deal_enabled: checked }))} />
             </div>
             <Input value={form.deal_badge} onChange={(e) => updateField("deal_badge", e.target.value)} placeholder="Deal badge" />
             <Input value={form.deal_title} onChange={(e) => updateField("deal_title", e.target.value)} placeholder="Deal title" />
@@ -163,7 +160,7 @@ const HomepageSettings = () => {
                 onChange={(e) => {
                   const value = e.target.value ? Number(e.target.value) : null;
                   const selected = promotions.find((promotion) => promotion.id === value) || null;
-                  setForm((prev: any) => ({
+                  setForm((prev) => ({
                     ...prev,
                     featured_promotion_id: value,
                     featured_promotion: selected,

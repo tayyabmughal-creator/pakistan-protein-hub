@@ -10,6 +10,7 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '
 import { toast } from 'sonner';
 import { Zap, Loader2 } from 'lucide-react';
 import apiClient from '@/lib/apiClient';
+import { getErrorMessage } from "@/lib/errors";
 
 const formSchema = z.object({
     new_password: z.string().min(8, 'Password must be at least 8 characters'),
@@ -45,10 +46,9 @@ const ResetPassword = () => {
             setTimeout(() => {
                 navigate('/login');
             }, 2000);
-        } catch (error: any) {
+        } catch (error: unknown) {
             console.error(error);
-            const msg = error.response?.data?.detail || 'Invalid or expired link. Please request a new one.';
-            toast.error(msg);
+            toast.error(getErrorMessage(error, 'Invalid or expired link. Please request a new one.'));
         } finally {
             setIsLoading(false);
         }

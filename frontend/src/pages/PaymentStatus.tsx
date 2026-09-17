@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { fetchPaymentSession } from "@/lib/api";
 import { clearGuestCart } from "@/lib/guestCart";
 import { clearAppliedPromoCode } from "@/lib/promoSession";
+import type { PaymentSession } from "@/lib/types";
 
 const getPaymentStateFromSessionStatus = (status?: string | null) => {
     switch (status) {
@@ -67,7 +68,7 @@ const getPaymentStatusMeta = (state: string) => {
 
 const PaymentStatus = () => {
     const [searchParams] = useSearchParams();
-    const [sessionData, setSessionData] = useState<any | null>(null);
+    const [sessionData, setSessionData] = useState<PaymentSession | null>(null);
     const [loading, setLoading] = useState(true);
 
     const sessionId = searchParams.get("session");

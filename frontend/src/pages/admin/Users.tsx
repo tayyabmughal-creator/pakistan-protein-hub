@@ -31,6 +31,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { fetchAdminUserById, fetchAdminUsers, updateAdminUser } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
+import { getErrorMessage } from "@/lib/errors";
+import type { AdminCustomer, AdminCustomerOrderSummary, Address } from "@/lib/types";
 
 type CustomerSegment = "all" | "buyers" | "staff" | "inactive";
 
@@ -73,11 +75,11 @@ const accountBadgeClasses = {
 };
 
 const AdminUsers = () => {
-    const [users, setUsers] = useState<any[]>([]);
+    const [users, setUsers] = useState<AdminCustomer[]>([]);
     const [loading, setLoading] = useState(true);
     const [search, setSearch] = useState("");
     const [segment, setSegment] = useState<CustomerSegment>("all");
-    const [selectedUser, setSelectedUser] = useState<any | null>(null);
+    const [selectedUser, setSelectedUser] = useState<AdminCustomer | null>(null);
     const [detailLoading, setDetailLoading] = useState(false);
     const [savingField, setSavingField] = useState<"is_active" | "is_staff" | null>(null);
 
@@ -163,7 +165,7 @@ const AdminUsers = () => {
         },
     ];
 
-    const openUserDetails = async (user: any) => {
+    const openUserDetails = async (user: AdminCustomer) => {
         setSelectedUser(user);
         setDetailLoading(true);
         try {
@@ -185,10 +187,8 @@ const AdminUsers = () => {
             setSelectedUser(updated);
             setUsers((prev) => prev.map((user) => (user.id === updated.id ? { ...user, ...updated } : user)));
             toast.success(field === "is_active" ? "Account status updated" : "Admin access updated");
-        } catch (error: any) {
-            const fieldError = error?.response?.data?.[field]?.[0];
-            const detail = error?.response?.data?.detail || fieldError || "Failed to update customer";
-            toast.error(detail);
+        } catch (error: unknown) {
+            toast.error(getErrorMessage(error, "Failed to update customer"));
         } finally {
             setSavingField(null);
         }
@@ -569,7 +569,7 @@ const AdminUsers = () => {
                                                     </div>
                                                     {selectedUser.addresses?.length ? (
                                                         <div className="space-y-3">
-                                                            {selectedUser.addresses.map((address: any) => (
+                                                            {selectedUser.addresses.map((address: Address) => (
                                                                 <div key={address.id} className="rounded-xl border border-border/50 p-3">
                                                                     <div className="mb-2 flex items-center justify-between gap-3">
                                                                         <div>
@@ -617,7 +617,7 @@ const AdminUsers = () => {
                                                 <h3 className="mb-3 font-semibold">Recent Orders</h3>
                                                 {selectedUser.recent_orders?.length ? (
                                                     <div className="space-y-3">
-                                                        {selectedUser.recent_orders.map((order: any) => (
+                                                        {selectedUser.recent_orders.map((order: AdminCustomerOrderSummary) => (
                                                             <div key={order.id} className="rounded-xl border border-border/50 p-3">
                                                                 <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                                                                     <div className="space-y-1">

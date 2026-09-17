@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { ArrowRight } from "lucide-react";
 import { fetchCategories, getImageUrl } from "@/lib/api";
 import { Skeleton } from "./ui/skeleton";
+import type { Category } from "@/lib/types";
 
 // Map slugs or indices to colors if not stored in DB
 const CATEGORY_COLORS = [
@@ -19,7 +20,7 @@ const Categories = () => {
     queryFn: fetchCategories,
   });
 
-  const categories = (data || []).filter((category: any) =>
+  const categories = (data || []).filter((category: Category) =>
     !["Featured", "protein", "Protein"].includes(category.name)
   );
 
@@ -51,7 +52,7 @@ const Categories = () => {
               <Skeleton key={i} className="h-48 w-full rounded-2xl bg-[#111]" />
             ))
           ) : (
-            categories.map((category: any, index: number) => (
+            categories.map((category: Category, index: number) => (
               <a
                 key={category.id}
                 href={`/products?category=${category.slug}`}

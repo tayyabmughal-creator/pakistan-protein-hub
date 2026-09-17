@@ -9,10 +9,11 @@ import { Badge } from "@/components/ui/badge";
 import { ArrowRight, Clock3, Package } from "lucide-react";
 import { getOrderStatusMeta, getOrderProgressIndex, ORDER_FLOW } from "@/lib/orderStatus";
 import { toast } from "sonner";
+import type { Order, OrderItem } from "@/lib/types";
 
 const Orders = () => {
     const { user } = useAuth();
-    const [orders, setOrders] = useState<any[]>([]);
+    const [orders, setOrders] = useState<Order[]>([]);
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
@@ -72,7 +73,7 @@ const Orders = () => {
                                 <div className="flex-1">
                                     <div className="flex items-center gap-4 mb-2">
                                         <div className="flex -space-x-3 overflow-hidden">
-                                            {order.items.slice(0, 3).map((item: any) => (
+                                            {order.items.slice(0, 3).map((item: OrderItem) => (
                                                 <div key={item.id} className="w-12 h-12 rounded-full border-2 border-card bg-muted flex items-center justify-center overflow-hidden">
                                                     <img
                                                         src={getImageUrl(item.product_image) || "/placeholder.png"}

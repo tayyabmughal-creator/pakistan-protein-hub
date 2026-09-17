@@ -8,6 +8,7 @@ import { toast } from "sonner";
 import { useAuth } from "@/context/AuthContext";
 import apiClient from "@/lib/apiClient";
 import { Zap, Loader2 } from "lucide-react";
+import { getErrorMessage } from "@/lib/errors";
 
 const Login = () => {
     const [email, setEmail] = useState("");
@@ -47,10 +48,9 @@ const Login = () => {
                     : "/";
 
             navigate(destination, { replace: true });
-        } catch (error: any) {
-            const msg = error.response?.data?.detail || "Login failed. Please check your credentials.";
+        } catch (error: unknown) {
             setErrorMessage("Incorrect email or password. Please try again.");
-            toast.error(msg);
+            toast.error(getErrorMessage(error, "Login failed. Please check your credentials."));
         } finally {
             setLoading(false);
         }

@@ -15,10 +15,11 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { fetchAdminCatalogSummary, fetchAdminDashboard } from "@/lib/api";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { toast } from "sonner";
+import type { AdminCatalogCategory, AdminCatalogReview, AdminCatalogSummary, DashboardSummary } from "@/lib/types";
 
 const Analytics = () => {
-  const [dashboard, setDashboard] = useState<any | null>(null);
-  const [catalog, setCatalog] = useState<any | null>(null);
+  const [dashboard, setDashboard] = useState<DashboardSummary | null>(null);
+  const [catalog, setCatalog] = useState<AdminCatalogSummary | null>(null);
   const isMobile = useIsMobile();
 
   useEffect(() => {
@@ -90,7 +91,7 @@ const Analytics = () => {
             <CardTitle className="font-heading">Category Coverage</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
-            {(catalog?.categories || []).map((category: any) => (
+            {(catalog?.categories || []).map((category: AdminCatalogCategory) => (
               <div key={category.id} className="flex flex-col gap-2 rounded-xl border border-border/60 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
                 <p className="font-medium">{category.name}</p>
                 <p className="text-sm text-muted-foreground">{category.product_count} products</p>
@@ -105,7 +106,7 @@ const Analytics = () => {
           </CardHeader>
           <CardContent className="space-y-3">
             {(catalog?.reviews || []).length > 0 ? (
-              catalog.reviews.map((review: any) => (
+              catalog.reviews.map((review: AdminCatalogReview) => (
                 <div key={review.product_name} className="flex flex-col gap-2 rounded-xl border border-border/60 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
                   <p className="font-medium">{review.product_name}</p>
                   <p className="text-sm text-muted-foreground">{review.review_count} reviews</p>

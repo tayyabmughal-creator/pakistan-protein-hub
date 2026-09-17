@@ -1,6 +1,7 @@
 const GUEST_ORDER_STORAGE_KEY = "guest-order-confirmation";
+import type { Order } from "./types";
 
-export const saveGuestOrderConfirmation = (order: any) => {
+export const saveGuestOrderConfirmation = (order: Order) => {
     localStorage.setItem(GUEST_ORDER_STORAGE_KEY, JSON.stringify(order));
 };
 

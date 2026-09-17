@@ -10,6 +10,7 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '
 import { toast } from 'sonner';
 import { Zap, Loader2 } from 'lucide-react';
 import apiClient from '@/lib/apiClient';
+import { getErrorMessage } from "@/lib/errors";
 
 const formSchema = z.object({
     email: z.string().email('Please enter a valid email address'),
@@ -32,10 +33,9 @@ const ForgotPassword = () => {
             await apiClient.post('/users/password-reset/', values);
             setIsSubmitted(true);
             toast.success('Reset link sent!');
-        } catch (error: any) {
+        } catch (error: unknown) {
             console.error(error);
-            const msg = error.response?.data?.detail || 'Something went wrong. Please try again.';
-            toast.error(msg);
+            toast.error(getErrorMessage(error, 'Something went wrong. Please try again.'));
         } finally {
             setIsLoading(false);
         }

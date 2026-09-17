@@ -1,7 +1,8 @@
 import { Zap, CheckCircle2 } from "lucide-react";
 import heroProtein from "@/assets/hero-protein.png";
+import type { HomePageSettings } from "@/lib/types";
 
-const Hero = ({ settings }: { settings?: any }) => {
+const Hero = ({ settings }: { settings?: HomePageSettings }) => {
   const stats = [
     { value: settings?.hero_stat_one_value || "50K+", label: settings?.hero_stat_one_label || "Happy Customers" },
     { value: settings?.hero_stat_two_value || "100%", label: settings?.hero_stat_two_label || "Authentic Products" },

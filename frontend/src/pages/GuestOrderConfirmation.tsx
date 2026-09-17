@@ -3,10 +3,11 @@ import { Link, useLocation, Navigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import PageHeader from "@/components/PageHeader";
 import { getGuestOrderConfirmation, saveGuestOrderConfirmation } from "@/lib/guestOrderSession";
+import type { Order } from "@/lib/types";
 
 const GuestOrderConfirmation = () => {
     const location = useLocation();
-    const orderFromState = (location.state as { order?: any } | null)?.order;
+    const orderFromState = (location.state as { order?: Order } | null)?.order;
     const order = orderFromState || getGuestOrderConfirmation();
 
     useEffect(() => {

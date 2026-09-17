@@ -9,6 +9,8 @@ import { useAuth } from "@/context/AuthContext";
 import { toast } from "sonner";
 import { useState } from "react";
 import { addGuestCartItem } from "@/lib/guestCart";
+import { getErrorMessage } from "@/lib/errors";
+import type { Product } from "@/lib/types";
 
 const ProductList = () => {
     const [searchParams] = useSearchParams();
@@ -26,7 +28,7 @@ const ProductList = () => {
 
     const products = data || [];
 
-    const handleAddToCart = async (e: React.MouseEvent, product: any) => {
+    const handleAddToCart = async (e: React.MouseEvent, product: Product) => {
         e.preventDefault();
         e.stopPropagation();
 
@@ -55,8 +57,8 @@ const ProductList = () => {
                 description: `${product.name} has been added to your cart.`,
                 icon: <Check className="text-green-500" />
             });
-        } catch (error: any) {
-            toast.error(error.response?.data?.error || "Failed to add to cart");
+        } catch (error: unknown) {
+            toast.error(getErrorMessage(error, "Failed to add to cart"));
         } finally {
             setAddingIds(prev => prev.filter(id => id !== product.id));
         }
@@ -104,7 +106,7 @@ const ProductList = () => {
                     </div>
                 ) : products.length > 0 ? (
                     <div className="space-y-6">
-                        {products.map((product: any) => (
+                        {products.map((product: Product) => (
                             <div
                                 key={product.id}
                                 className="group relative bg-[#111] border border-white/10 rounded-2xl p-6 flex flex-col md:flex-row gap-8 hover:border-primary/50 transition-all duration-300 hover:shadow-[0_0_20px_rgba(34,197,94,0.1)] cursor-pointer"

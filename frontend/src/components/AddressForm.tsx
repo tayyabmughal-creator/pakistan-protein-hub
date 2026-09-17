@@ -8,6 +8,7 @@ import { createAddress, deleteAddress } from "@/lib/api";
 import { toast } from "sonner";
 import { useState } from "react";
 import Loader from "@/components/Loader";
+import { getErrorMessage } from "@/lib/errors";
 
 interface AddressFormData {
     full_name: string;
@@ -33,8 +34,8 @@ const AddressForm = ({ onSuccess, onCancel }: AddressFormProps) => {
             await createAddress(data);
             toast.success("Address added successfully");
             onSuccess();
-        } catch (error: any) {
-            toast.error(error.response?.data?.detail || "Failed to add address");
+        } catch (error: unknown) {
+            toast.error(getErrorMessage(error, "Failed to add address"));
         } finally {
             setLoading(false);
         }

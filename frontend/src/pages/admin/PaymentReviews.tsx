@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { AlertCircle, CheckCircle2, Eye, XCircle } from "lucide-react";
 import { toast } from "sonner";
 
@@ -14,15 +14,17 @@ import {
 } from "@/components/ui/dialog";
 import { fetchAdminPaymentReviews, resolveAdminPaymentReview } from "@/lib/api";
 import { cn } from "@/lib/utils";
+import { getErrorMessage } from "@/lib/errors";
+import type { OrderItemSnapshot, PaymentSession } from "@/lib/types";
 
 const PaymentReviews = () => {
-    const [sessions, setSessions] = useState<any[]>([]);
+    const [sessions, setSessions] = useState<PaymentSession[]>([]);
     const [loading, setLoading] = useState(true);
     const [statusFilter, setStatusFilter] = useState<"REVIEW" | "ALL">("REVIEW");
-    const [selectedSession, setSelectedSession] = useState<any | null>(null);
+    const [selectedSession, setSelectedSession] = useState<PaymentSession | null>(null);
     const [processingSessionId, setProcessingSessionId] = useState<string | null>(null);
 
-    const loadSessions = async (nextFilter = statusFilter) => {
+    const loadSessions = useCallback(async (nextFilter = statusFilter) => {
         try {
             setLoading(true);
             const data = await fetchAdminPaymentReviews(nextFilter);
@@ -32,13 +34,13 @@ const PaymentReviews = () => {
         } finally {
             setLoading(false);
         }
-    };
+    }, [statusFilter]);
 
     useEffect(() => {
         loadSessions(statusFilter);
-    }, [statusFilter]);
+    }, [loadSessions, statusFilter]);
 
-    const handleResolve = async (session: any, action: "approve" | "fail") => {
+    const handleResolve = async (session: PaymentSession, action: "approve" | "fail") => {
         try {
             setProcessingSessionId(session.public_id);
             const updated = await resolveAdminPaymentReview(session.public_id, action);
@@ -51,8 +53,8 @@ const PaymentReviews = () => {
                 return prev.map((item) => (item.public_id === session.public_id ? updated : item));
             });
             setSelectedSession((prev) => (prev?.public_id === session.public_id ? updated : prev));
-        } catch (error: any) {
-            toast.error(error.response?.data?.error || "Could not update this payment review.");
+        } catch (error: unknown) {
+            toast.error(getErrorMessage(error, "Could not update this payment review."));
         } finally {
             setProcessingSessionId(null);
         }
@@ -296,7 +298,7 @@ const PaymentReviews = () => {
                                     <p className="text-xs text-muted-foreground">{selectedItems.length} line item(s)</p>
                                 </div>
                                 <div className="mt-3 space-y-3">
-                                    {selectedItems.map((item: any, index: number) => (
+                                    {selectedItems.map((item: OrderItemSnapshot, index: number) => (
                                         <div key={`${item.product_id}-${index}`} className="rounded-lg border border-border/60 px-3 py-3 text-sm">
                                             <p className="font-medium">{item.product_name}</p>
                                             <p className="text-muted-foreground">

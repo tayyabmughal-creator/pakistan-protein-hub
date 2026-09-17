@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { fetchHomePageSettings, fetchOrderById, cancelOrder, getImageUrl } from "@/lib/api";
@@ -9,10 +9,11 @@ import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { CheckCircle, Package, Truck, XCircle } from "lucide-react";
 import { getOrderProgressIndex, getOrderStatusMeta, ORDER_FLOW } from "@/lib/orderStatus";
+import type { Order, OrderItem } from "@/lib/types";
 
 const OrderDetails = () => {
     const { id } = useParams<{ id: string }>();
-    const [order, setOrder] = useState<any>(null);
+    const [order, setOrder] = useState<Order | null>(null);
     const [loading, setLoading] = useState(true);
     const [cancelling, setCancelling] = useState(false);
     const { data: settings } = useQuery({
@@ -20,7 +21,7 @@ const OrderDetails = () => {
         queryFn: fetchHomePageSettings,
     });
 
-    const loadOrder = async () => {
+    const loadOrder = useCallback(async () => {
         try {
             setLoading(true);
             if (id) {
@@ -32,14 +33,13 @@ const OrderDetails = () => {
         } finally {
             setLoading(false);
         }
-    };
+    }, [id]);
 
     useEffect(() => {
         loadOrder();
-    }, [id]);
+    }, [loadOrder]);
 
     const handleCancel = async () => {
-        // eslint-disable-next-line
         if (!confirm("Are you sure you want to cancel this order?")) return;
         try {
             setCancelling(true);
@@ -210,7 +210,7 @@ const OrderDetails = () => {
                     <div className="bg-card border border-border rounded-xl p-6">
                         <h3 className="font-heading font-bold text-lg mb-4">Items in Order</h3>
                         <div className="space-y-6">
-                            {order.items.map((item: any) => (
+                            {order.items.map((item: OrderItem) => (
                                 <div key={item.id} className="flex gap-4 items-center border-b border-border pb-6 last:border-0 last:pb-0">
                                     <div className="w-20 h-20 bg-white rounded-lg border border-border overflow-hidden flex-shrink-0">
                                         <img
