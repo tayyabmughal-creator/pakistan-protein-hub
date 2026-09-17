@@ -41,6 +41,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = os.environ.get('SECRET_KEY')
 if not SECRET_KEY:
     if 'pytest' in sys.argv[0]:
+        # repo-hygiene: allow — fixed test-run key, never used outside pytest.
         SECRET_KEY = 'test-secret-key-with-safe-length-123456'
     else:
         raise RuntimeError('SECRET_KEY must be set in the environment.')

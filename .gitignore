@@ -1,24 +1,113 @@
+# ---------------------------------------------------------------------------
+# Dependencies
+# ---------------------------------------------------------------------------
 node_modules/
 frontend/node_modules/
 backend/node_modules/
-.env
-*.env
-backend/.env
-.DS_Store
-__pycache__/
-*.py[cod]
-*.sqlite3
-*.log
-.pytest_cache/
-.coverage
-htmlcov/
-dist/
-build/
-staticfiles/
-media/
 backend/venv/
 .venv/
 venv/
+
+# ---------------------------------------------------------------------------
+# Secrets and environment
+# Only *.example files may be committed.
+# ---------------------------------------------------------------------------
+.env
+*.env
+.env.*
+!.env*.example
+!*.env.example
+backend/.env
 frontend/.env.local
 frontend/.env.production
 frontend/.env.development
+
+# Credential material — never commit any of these.
+*.pem
+*.key
+*.p12
+*.pfx
+*.jks
+*.keystore
+id_rsa
+id_rsa.*
+id_ed25519
+id_ed25519.*
+*.ppk
+service-account*.json
+gha-credentials*.json
+secrets.json
+secrets.yml
+secrets.yaml
+
+# ---------------------------------------------------------------------------
+# Databases and data exports
+# These have leaked customer PII, password hashes and JWT refresh tokens
+# before. See SECURITY_REMEDIATION.md. Generated fixtures belong in
+# backend/*/fixtures/ and must contain synthetic data only.
+# ---------------------------------------------------------------------------
+*.sqlite3
+*.sqlite3-journal
+*.sqlite
+*.db
+*.sql
+*.dump
+*.sql.gz
+*.dump.gz
+backend/data.json
+backend/dbdata.json
+backend/*_dump.json
+backend/*_export.json
+backend/backups/
+backups/
+dumps/
+*_export.csv
+*-export.csv
+*_report.csv
+*-report.csv
+
+# ---------------------------------------------------------------------------
+# Python build artefacts
+# ---------------------------------------------------------------------------
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+coverage.xml
+htmlcov/
+
+# ---------------------------------------------------------------------------
+# Build output and static/media
+# ---------------------------------------------------------------------------
+dist/
+build/
+.next/
+out/
+staticfiles/
+media/
+
+# ---------------------------------------------------------------------------
+# Logs, scratch files and archives
+# ---------------------------------------------------------------------------
+*.log
+build_log*.txt
+build_check.txt
+build_error.txt
+diag_output.txt
+test_results.txt
+*.zip
+*.tar
+*.tar.gz
+*.tgz
+
+# ---------------------------------------------------------------------------
+# Editor / OS
+# ---------------------------------------------------------------------------
+.DS_Store
+Thumbs.db
+*.swp
+.idea/
+.vscode/
