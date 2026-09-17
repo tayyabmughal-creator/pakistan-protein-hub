@@ -171,34 +171,39 @@ check stops depending on someone remembering.
 
 ---
 
-## 4. Git history rewrite — NOT PERFORMED, AWAITING APPROVAL
+## 4. Git history — DECIDED: rotate, do not rewrite
 
-Untracking a file removes it from future commits. **It does not remove it from
-history.** `backend/data.json`, `backend/db.sqlite3` and `backend/.env` remain
+**Owner decision (2026-09-17): the repository is private. Rotate the credentials
+in §3; do not rewrite history.**
+
+Untracking a file removes it from future commits. It does not remove it from
+history — `backend/data.json`, `backend/db.sqlite3` and `backend/.env` remain
 readable at their historical commits by anyone who can clone this repository.
+That residual exposure is **accepted**, bounded by the repository's existing
+collaborator list.
 
-Rewriting history is destructive and irreversible, and this repository has two
-other contributor branches (`origin/abdul`, `origin/adeel`). Per the engagement
-rules it has **not** been done and **will not** be done without explicit approval.
+What this decision does and does not cover:
 
-### 4.1 The decision
+- **Covered by rotation.** Once §3 is done, the Brevo credentials, `SECRET_KEY`,
+  database password and legacy `JWT_SECRET` in history are worthless for
+  authentication. This is the exposure that mattered.
+- **Not covered.** The **customer PII** in `data.json` and `db.sqlite3` — names,
+  phone numbers, addresses, emails, PBKDF2 hashes — cannot be rotated away. It
+  stays readable to anyone with repository access, historically and permanently.
 
-**Rotation (§3) is the fix that actually protects you, and it works without any
-rewrite.** Once credentials are rotated, the historical copies are worthless for
-authentication. What a rewrite additionally removes is the **customer PII**
-(names, phone numbers, addresses, emails, password hashes) which cannot be
-"rotated".
+**Therefore: treat repository access as access to customer data.** Audit the
+collaborator list, remove anyone who no longer needs it, and require 2FA. If the
+repository is ever made public, or if it turns out a past collaborator was
+outside the business, revisit this decision — the §4.1 procedure below still
+applies, and the PII should then be treated as disclosed.
 
-So the question is narrow: **is the repository private or public?**
+No force-push has been performed. `origin/abdul` and `origin/adeel` are
+untouched.
 
-- **Private repo, trusted collaborators:** rotate, skip the rewrite. The PII
-  exposure is bounded by the existing access list. The cost and breakage of a
-  rewrite is not obviously worth it.
-- **Public repo, or the access list ever included someone outside the business:**
-  rewrite, and treat the PII as disclosed regardless (the clone may already exist
-  elsewhere). Notify affected customers if local obligations require it.
+### 4.1 Rewrite procedure — retained for reference, NOT to be run
 
-### 4.2 Prepared commands — DO NOT RUN WITHOUT APPROVAL
+Kept only in case the visibility assumption changes. Running this requires a
+fresh decision and coordination with every contributor.
 
 Requires [`git-filter-repo`](https://github.com/newren/git-filter-repo).
 Coordinate with every contributor first: **all of them must re-clone afterwards.**
@@ -235,9 +240,9 @@ git push --force --mirror origin
 #    rotate anything in §3 that has not already been rotated.
 ```
 
-**Rotation in §3 should happen regardless of this decision, and should happen
-first.** A rewrite without rotation protects nothing — anyone who already cloned
-still has the credentials.
+A rewrite without rotation protects nothing — anyone who already cloned still
+has the credentials. **§3 rotation is the action that matters, and it is
+outstanding.**
 
 ---
 
