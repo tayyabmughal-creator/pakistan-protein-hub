@@ -65,7 +65,12 @@ export function getErrorMessage(
     if (error.response.status >= 500) {
       return "The server had a problem handling that. Please try again shortly.";
     }
-    return error.message || fallback;
+
+    // Deliberately NOT error.message here. Axios always sets one ("Request
+    // failed with status code 400"), which is developer-facing noise and would
+    // mean the caller's tailored fallback — "Could not save the category" —
+    // never reached the customer.
+    return fallback;
   }
 
   if (error instanceof Error && error.message) return error.message;

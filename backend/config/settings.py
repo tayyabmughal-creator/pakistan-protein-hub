@@ -183,18 +183,52 @@ USE_TZ = True
 
 STATIC_URL = 'static/'
 STATIC_ROOT = BASE_DIR / 'staticfiles'
+
+# ---------------------------------------------------------------------------
+# Media (customer-visible uploads: product and category images)
+# ---------------------------------------------------------------------------
+# Local disk by default. That is adequate for one server and is what production
+# runs today, but it has two properties worth knowing:
+#
+#   1. Uploads live outside the image, so they are NOT part of the immutable
+#      artefact and are NOT covered by a database backup. Back up MEDIA_ROOT
+#      separately, or move to object storage.
+#   2. The VPS deploy runs `git reset --hard`, which deletes files removed from
+#      the index. backend/media/ is deliberately still tracked for that reason —
+#      see SECURITY_REMEDIATION.md. Moving to object storage is what removes
+#      that hazard for good.
+#
+# To switch to S3-compatible object storage, install django-storages[s3] and set
+# MEDIA_STORAGE_BACKEND=storages.backends.s3.S3Storage plus the AWS_* variables.
+# No code change is needed; nothing else in the app references the filesystem.
+MEDIA_STORAGE_BACKEND = os.environ.get(
+    'MEDIA_STORAGE_BACKEND', 'django.core.files.storage.FileSystemStorage'
+)
+
 STORAGES = {
     'default': {
-        'BACKEND': 'django.core.files.storage.FileSystemStorage',
+        'BACKEND': MEDIA_STORAGE_BACKEND,
     },
     'staticfiles': {
         'BACKEND': 'whitenoise.storage.CompressedManifestStaticFilesStorage',
     },
 }
 
-# Media files (User-uploaded content)
-MEDIA_URL = '/media/'
+MEDIA_URL = os.environ.get('MEDIA_URL', '/media/')
 MEDIA_ROOT = BASE_DIR / 'media'
+
+# Read by django-storages when object storage is configured. Left empty and
+# unused otherwise — no credentials are required to run on local disk.
+AWS_STORAGE_BUCKET_NAME = os.environ.get('AWS_STORAGE_BUCKET_NAME', '')
+AWS_S3_REGION_NAME = os.environ.get('AWS_S3_REGION_NAME', '')
+AWS_S3_ENDPOINT_URL = os.environ.get('AWS_S3_ENDPOINT_URL', '') or None
+AWS_S3_CUSTOM_DOMAIN = os.environ.get('AWS_S3_CUSTOM_DOMAIN', '') or None
+AWS_ACCESS_KEY_ID = os.environ.get('AWS_ACCESS_KEY_ID', '')
+AWS_SECRET_ACCESS_KEY = os.environ.get('AWS_SECRET_ACCESS_KEY', '')
+# Product images are public; signed URLs would break CDN caching for no benefit.
+AWS_QUERYSTRING_AUTH = get_bool_env('AWS_QUERYSTRING_AUTH', False)
+AWS_S3_FILE_OVERWRITE = False
+AWS_DEFAULT_ACL = None
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
