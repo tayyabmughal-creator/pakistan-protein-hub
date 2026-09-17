@@ -20,6 +20,7 @@ from django.db.models import F
 from django.utils import timezone
 
 from cart.models import Cart
+from common.dispatch import enqueue
 from products.models import Product
 from products.services import StockService
 from promotions.models import Promotion
@@ -49,15 +50,25 @@ def _shipping_fee_for_subtotal(subtotal):
 
 
 def _notify_new_order(order):
-    """Fire order notifications after commit. Never let them fail the order."""
-    try:
-        send_order_notifications(order)
-    except Exception:  # noqa: BLE001 — a failed email must not lose a paid order
-        logger.exception("Order confirmation notification failed for order %s", order.id)
-    try:
-        send_admin_new_order_push(order)
-    except Exception:  # noqa: BLE001
-        logger.exception("Admin push notification failed for order %s", order.id)
+    """Queue the order notifications. Never let them fail the order.
+
+    One task per channel, so a dead SMTP server does not also cost the customer
+    their SMS or the shop its push. These used to run inline: an SMTP handshake,
+    a Twilio call and an Expo call, each with a 10 second timeout, all inside the
+    request that placed the order.
+    """
+    from .tasks import (
+        send_admin_new_order_push_task,
+        send_order_confirmation_email_task,
+        send_order_confirmation_sms_task,
+    )
+
+    for task in (
+        send_order_confirmation_email_task,
+        send_order_confirmation_sms_task,
+        send_admin_new_order_push_task,
+    ):
+        enqueue(task, order.id)
 
 
 class PromotionService:
@@ -727,7 +738,9 @@ class PaymentSessionService:
             updated_fields.append("gateway_tracker")
         session.save(update_fields=updated_fields)
         if should_notify:
-            send_admin_payment_review_push(session)
+            from .tasks import send_admin_payment_review_push_task
+
+            enqueue(send_admin_payment_review_push_task, str(session.public_id))
         return session
 
     @classmethod

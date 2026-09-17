@@ -18,9 +18,16 @@ from django.contrib import admin
 from django.urls import path, include
 from django.conf import settings
 
+from common.health import liveness, readiness
 from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView
 
 urlpatterns = [
+    # Liveness has no dependencies on purpose: restarting the web process does
+    # not fix a database, so a liveness check that touches one turns a database
+    # blip into a restart loop. Readiness is what gates traffic and deploys.
+    path('healthz', liveness, name='liveness'),
+    path('readyz', readiness, name='readiness'),
+
     path(f"{getattr(settings, 'ADMIN_URL', 'admin/')}", admin.site.urls),
     path('api/', include('users.urls')),
     path('api/', include('products.urls')),

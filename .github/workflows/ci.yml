@@ -52,7 +52,10 @@ jobs:
 
     env:
       SECRET_KEY: ci-secret-key-not-used-anywhere-else-000000
-      DEBUG: "0"
+      # Tests and the plain system check run as a development configuration.
+      # The production-shaped checks below set DEBUG=0 explicitly, which is what
+      # triggers the settings-time configuration validation.
+      DEBUG: "1"
       ALLOWED_HOSTS: localhost,127.0.0.1
       POSTGRES_DB: paknutrition_test
       POSTGRES_USER: paknutrition
@@ -83,12 +86,25 @@ jobs:
         working-directory: backend
         env:
           # Production-shaped settings, so the security checks assess what
-          # production will actually run.
+          # production will actually run. DEBUG=0 also makes settings run the
+          # configuration validator, so this step proves a correct production
+          # config is accepted — the refusal path is unit-tested in common/tests.
+          DEBUG: "0"
           SECRET_KEY: ci-secret-key-long-enough-and-random-enough-for-checks-9f3a2b7c1d
+          ALLOWED_HOSTS: shop.example.com
+          CORS_ALLOWED_ORIGINS: https://shop.example.com
+          CSRF_TRUSTED_ORIGINS: https://shop.example.com
+          FRONTEND_URL: https://shop.example.com
+          BACKEND_PUBLIC_URL: https://shop.example.com
           SECURE_SSL_REDIRECT: "1"
           SESSION_COOKIE_SECURE: "1"
           CSRF_COOKIE_SECURE: "1"
           SECURE_HSTS_SECONDS: "31536000"
+          REDIS_URL: redis://localhost:6379/0
+          CELERY_BROKER_URL: redis://localhost:6379/1
+          CELERY_TASK_ALWAYS_EAGER: "0"
+          ORDER_NOTIFICATION_EMAIL_ENABLED: "0"
+          ORDER_NOTIFICATION_SMS_ENABLED: "0"
         # Scoped to the security tag: a warning here is a real deployment risk,
         # so WARNING is a fair failure threshold. Running every tag would fail
         # on drf-spectacular schema-completeness hints, which are not.
@@ -136,6 +152,180 @@ jobs:
         env:
           VITE_API_BASE_URL: http://127.0.0.1:8000/api
         run: npm run build
+
+  smoke:
+    name: End-to-end smoke
+    runs-on: ubuntu-latest
+
+    # Runs the purchase path against a real running server: browse, place a
+    # guest COD order, track it. Unit tests exercise views in isolation; this is
+    # the check that the assembled application actually sells something.
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: paknutrition_smoke
+          POSTGRES_USER: paknutrition
+          POSTGRES_PASSWORD: ci-postgres-password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 3s
+          --health-retries 5
+
+    env:
+      SECRET_KEY: ci-secret-key-not-used-anywhere-else-000000
+      DEBUG: "1"
+      ALLOWED_HOSTS: localhost,127.0.0.1
+      POSTGRES_DB: paknutrition_smoke
+      POSTGRES_USER: paknutrition
+      POSTGRES_PASSWORD: ci-postgres-password
+      POSTGRES_HOST: localhost
+      POSTGRES_PORT: "5432"
+      REDIS_URL: redis://localhost:6379/0
+      CELERY_BROKER_URL: redis://localhost:6379/1
+      # No mail server in CI; the console backend keeps notifications loggable.
+      EMAIL_BACKEND: django.core.mail.backends.console.EmailBackend
+      ORDER_NOTIFICATION_SMS_ENABLED: "0"
+      ADMIN_PUSH_NOTIFICATIONS_ENABLED: "0"
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+
+      - name: Install dependencies
+        working-directory: backend
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Prepare a database with something to sell
+        working-directory: backend
+        run: |
+          python manage.py migrate --noinput
+          python manage.py seed_drill_data
+
+      - name: Start the application
+        working-directory: backend
+        run: |
+          gunicorn config.wsgi:application --bind 127.0.0.1:8000 --workers 2 \
+            --access-logfile - --error-logfile - > "$RUNNER_TEMP/server.log" 2>&1 &
+          for attempt in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:8000/readyz >/dev/null 2>&1; then
+              echo "Ready after ${attempt}s"; exit 0
+            fi
+            sleep 1
+          done
+          echo "::error::Server never became ready"
+          cat "$RUNNER_TEMP/server.log"
+          exit 1
+
+      - name: Smoke test
+        run: python scripts/smoke_test.py --base-url http://127.0.0.1:8000
+
+      - name: Server log on failure
+        if: failure()
+        run: cat "$RUNNER_TEMP/server.log"
+
+  restore-drill:
+    name: Backup and restore drill
+    runs-on: ubuntu-latest
+
+    # A backup that has never been restored is not a backup. This proves the
+    # whole loop — dump, restore into a scratch database, count the rows — on
+    # every push, so the runbook cannot rot into something that no longer works
+    # by the time someone needs it at 2am.
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: paknutrition_drill
+          POSTGRES_USER: paknutrition
+          POSTGRES_PASSWORD: ci-postgres-password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      SECRET_KEY: ci-secret-key-not-used-anywhere-else-000000
+      DEBUG: "1"
+      POSTGRES_DB: paknutrition_drill
+      POSTGRES_USER: paknutrition
+      POSTGRES_PASSWORD: ci-postgres-password
+      POSTGRES_HOST: localhost
+      POSTGRES_PORT: "5432"
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+
+      - name: Install PostgreSQL 16 client
+        # The runner ships an older client; pg_dump refuses to dump a newer
+        # server than itself, so match the server version explicitly.
+        run: |
+          sudo install -d /usr/share/postgresql-common/pgdg
+          sudo curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc \
+            -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc
+          echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] \
+            https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" \
+            | sudo tee /etc/apt/sources.list.d/pgdg.list
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client-16
+          pg_dump --version
+
+      - name: Install dependencies
+        working-directory: backend
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-dev.txt
+
+      - name: Build a database with data in it
+        working-directory: backend
+        run: |
+          python manage.py migrate --noinput
+          python manage.py seed_drill_data
+
+      - name: Take a backup
+        working-directory: backend
+        run: python manage.py backup_database --output-dir "$RUNNER_TEMP/backups"
+
+      - name: Restore it into a scratch database and verify the rows survived
+        working-directory: backend
+        run: |
+          BACKUP=$(ls -1t "$RUNNER_TEMP/backups"/paknutrition*.dump | head -1)
+          echo "Restoring $BACKUP"
+          python manage.py restore_database "$BACKUP" --into-scratch-db | tee "$RUNNER_TEMP/drill.txt"
+          # An exit code of 0 is not proof: pg_restore exits clean on an empty
+          # dump. Fail if the drill reported any table as restoring empty.
+          if grep -q "restored empty" "$RUNNER_TEMP/drill.txt"; then
+            echo "::error::Restore drill produced empty tables. The backup is not usable."
+            exit 1
+          fi
 
   dependency-audit:
     name: Dependency audit

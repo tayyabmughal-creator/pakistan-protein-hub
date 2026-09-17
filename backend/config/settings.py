@@ -75,6 +75,9 @@ INSTALLED_APPS = [
     'rest_framework_simplejwt.token_blacklist',
     'django_filters',
     # Local
+    # `common` holds no models, but must be installed for its management
+    # commands (backup_database, restore_database, verify_backup) to be found.
+    'common',
     'users',
     'products',
     'cart',
@@ -87,6 +90,9 @@ INSTALLED_APPS = [
 ]
 
 MIDDLEWARE = [
+    # First, so every log line from this request — including ones emitted by
+    # middleware below — carries the correlation id.
+    'common.middleware.RequestIDMiddleware',
     'corsheaders.middleware.CorsMiddleware',
     'django.middleware.security.SecurityMiddleware',
     'whitenoise.middleware.WhiteNoiseMiddleware',
@@ -272,20 +278,130 @@ TWILIO_ACCOUNT_SID = os.getenv('TWILIO_ACCOUNT_SID', '')
 TWILIO_AUTH_TOKEN = os.getenv('TWILIO_AUTH_TOKEN', '')
 TWILIO_FROM_NUMBER = os.getenv('TWILIO_FROM_NUMBER', '')
 
-# Logging Configuration
+# ---------------------------------------------------------------------------
+# Cache and background processing
+# ---------------------------------------------------------------------------
+# Redis backs both the shared cache and the Celery broker. Without REDIS_URL the
+# app still runs: caching becomes a no-op and Celery falls back to running tasks
+# inline (see common.dispatch.enqueue). That keeps local development and CI
+# working with no extra services, and the production config check refuses to
+# start without it.
+REDIS_URL = os.environ.get('REDIS_URL', '')
+
+if REDIS_URL:
+    CACHES = {
+        'default': {
+            'BACKEND': 'django.core.cache.backends.redis.RedisCache',
+            'LOCATION': REDIS_URL,
+            'KEY_PREFIX': 'paknutrition',
+            'TIMEOUT': 300,
+        }
+    }
+else:
+    CACHES = {
+        'default': {
+            'BACKEND': 'django.core.cache.backends.dummy.DummyCache',
+        }
+    }
+
+CELERY_BROKER_URL = os.environ.get('CELERY_BROKER_URL', REDIS_URL)
+CELERY_RESULT_BACKEND = os.environ.get('CELERY_RESULT_BACKEND', '')
+CELERY_ACCEPT_CONTENT = ['json']
+CELERY_TASK_SERIALIZER = 'json'
+CELERY_RESULT_SERIALIZER = 'json'
+CELERY_TIMEZONE = TIME_ZONE
+# Acknowledge after the task finishes, so a worker killed mid-task returns the
+# job to the queue rather than dropping a customer's confirmation email.
+CELERY_TASK_ACKS_LATE = True
+CELERY_TASK_REJECT_ON_WORKER_LOST = True
+# One at a time: these tasks are network-bound and short, and prefetching just
+# parks work on a busy worker while another sits idle.
+CELERY_WORKER_PREFETCH_MULTIPLIER = 1
+CELERY_TASK_TIME_LIMIT = 120
+CELERY_TASK_SOFT_TIME_LIMIT = 90
+CELERY_BROKER_CONNECTION_RETRY_ON_STARTUP = True
+# Without a broker, run tasks inline so nothing silently stops happening.
+CELERY_TASK_ALWAYS_EAGER = get_bool_env('CELERY_TASK_ALWAYS_EAGER', not bool(CELERY_BROKER_URL))
+CELERY_TASK_EAGER_PROPAGATES = False
+
+# ---------------------------------------------------------------------------
+# Logging
+# ---------------------------------------------------------------------------
+# JSON in production so logs are queryable; human-readable locally.
+LOG_LEVEL = os.environ.get('LOG_LEVEL', 'INFO').upper()
+LOG_FORMAT = os.environ.get('LOG_FORMAT', 'text' if DEBUG else 'json').lower()
+
 LOGGING = {
     'version': 1,
     'disable_existing_loggers': False,
+    'filters': {
+        'request_id': {
+            '()': 'common.logging.RequestIdFilter',
+        },
+    },
+    'formatters': {
+        'json': {
+            '()': 'common.logging.JsonFormatter',
+        },
+        'text': {
+            'format': '%(asctime)s %(levelname)-7s [%(request_id)s] %(name)s: %(message)s',
+        },
+    },
     'handlers': {
         'console': {
             'class': 'logging.StreamHandler',
+            'formatter': LOG_FORMAT if LOG_FORMAT in {'json', 'text'} else 'json',
+            'filters': ['request_id'],
         },
     },
     'root': {
         'handlers': ['console'],
-        'level': 'INFO',
+        'level': LOG_LEVEL,
+    },
+    'loggers': {
+        # Payment and webhook activity is the audit trail for money. Always INFO,
+        # never suppressed by a raised root level.
+        'payments': {'handlers': ['console'], 'level': 'INFO', 'propagate': False},
+        'orders': {'handlers': ['console'], 'level': 'INFO', 'propagate': False},
+        'paknutrition.request': {'handlers': ['console'], 'level': 'INFO', 'propagate': False},
+        'paknutrition.celery': {'handlers': ['console'], 'level': 'INFO', 'propagate': False},
+        'django.request': {'handlers': ['console'], 'level': 'WARNING', 'propagate': False},
+        # Query logging is deafening and can echo customer data into the log.
+        'django.db.backends': {'handlers': ['console'], 'level': 'WARNING', 'propagate': False},
     },
 }
+
+# ---------------------------------------------------------------------------
+# Error monitoring
+# ---------------------------------------------------------------------------
+# Optional and unconfigured by default. Set SENTRY_DSN to turn it on; no vendor
+# is required for the app to run, and nothing is sent anywhere without a DSN.
+SENTRY_DSN = os.environ.get('SENTRY_DSN', '')
+SENTRY_ENVIRONMENT = os.environ.get('SENTRY_ENVIRONMENT', 'production' if not DEBUG else 'development')
+SENTRY_TRACES_SAMPLE_RATE = float(os.environ.get('SENTRY_TRACES_SAMPLE_RATE', '0'))
+
+if SENTRY_DSN:
+    try:
+        import sentry_sdk
+        from sentry_sdk.integrations.celery import CeleryIntegration
+        from sentry_sdk.integrations.django import DjangoIntegration
+
+        sentry_sdk.init(
+            dsn=SENTRY_DSN,
+            environment=SENTRY_ENVIRONMENT,
+            integrations=[DjangoIntegration(), CeleryIntegration()],
+            traces_sample_rate=SENTRY_TRACES_SAMPLE_RATE,
+            # Customer records must not leave the estate in a crash report.
+            send_default_pii=False,
+        )
+    except ImportError:
+        import warnings
+
+        warnings.warn(
+            'SENTRY_DSN is set but sentry-sdk is not installed. '
+            'Add sentry-sdk to requirements.txt or unset SENTRY_DSN.',
+            RuntimeWarning,
+        )
 
 CORS_ALLOW_CREDENTIALS = True
 CORS_ALLOW_ALL_ORIGINS = get_bool_env('CORS_ALLOW_ALL_ORIGINS', DEBUG)
@@ -313,3 +429,31 @@ SECURE_HSTS_SECONDS = int(os.environ.get('SECURE_HSTS_SECONDS', '31536000' if no
 SECURE_HSTS_INCLUDE_SUBDOMAINS = get_bool_env('SECURE_HSTS_INCLUDE_SUBDOMAINS', not DEBUG)
 SECURE_HSTS_PRELOAD = get_bool_env('SECURE_HSTS_PRELOAD', not DEBUG)
 SECURE_CONTENT_TYPE_NOSNIFF = True
+
+
+# ---------------------------------------------------------------------------
+# Production configuration validation
+# ---------------------------------------------------------------------------
+# A misconfigured production box used to boot happily and fail later: a missing
+# POSTGRES_DB silently fell back to a SQLite file that deploys overwrite, and
+# SAFEPAY_ENABLED without a webhook secret produced a checkout that could never
+# settle. Validate at import, report every problem at once, and refuse to start.
+#
+# Set CONFIG_CHECK_STRICT=0 to downgrade to a warning — for a recovery shell on
+# a box that is already broken, not for normal operation.
+
+if not DEBUG and 'pytest' not in sys.argv[0]:
+    from common.env import ImproperlyConfigured, validate_production_settings
+
+    _config_problems = validate_production_settings(sys.modules[__name__])
+    if _config_problems:
+        _report = '\n'.join(f'  - {problem}' for problem in _config_problems)
+        _message = (
+            f'Refusing to start: {len(_config_problems)} configuration problem(s).\n'
+            f'{_report}\n'
+            'Fix these in backend/.env, or set CONFIG_CHECK_STRICT=0 to start anyway.'
+        )
+        if get_bool_env('CONFIG_CHECK_STRICT', True):
+            raise ImproperlyConfigured(_message)
+        import warnings
+        warnings.warn(_message, RuntimeWarning)

@@ -18,5 +18,14 @@ Pillow==12.3.0
 psycopg2-binary==2.9.13
 python-dotenv==1.2.3
 
+# Background processing and shared cache. Both optional at runtime: without
+# REDIS_URL the cache is a no-op and tasks run inline, so local development and
+# CI need no extra services.
+celery[redis]==5.6.1
+redis==6.4.0
+
 gunicorn==26.2.0
 whitenoise==6.12.0
+
+# Error monitoring is opt-in — nothing is sent anywhere unless SENTRY_DSN is set.
+sentry-sdk==2.44.0

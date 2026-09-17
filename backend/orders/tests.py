@@ -107,7 +107,7 @@ class OrderApiTests(APITestCase):
         self.assertEqual(str(order.total_amount), "4250.00")
         self.assertEqual(self.low_price_product.stock, 9)
 
-    @patch("orders.services.send_admin_new_order_push")
+    @patch("orders.tasks.send_admin_new_order_push")
     def test_create_order_triggers_admin_push_notification(self, mock_push):
         # Notifications now run in transaction.on_commit so an SMTP or Expo call
         # cannot hold checkout row locks open, and a rolled-back checkout cannot
@@ -343,7 +343,7 @@ class AdminPaymentReviewTests(APITestCase):
         self.session.refresh_from_db()
         self.assertEqual(self.session.status, "FAILED")
 
-    @patch("orders.services.send_admin_payment_review_push")
+    @patch("orders.tasks.send_admin_payment_review_push")
     def test_review_required_notification_is_sent_once(self, mock_push):
         self.session.status = "PENDING"
         self.session.save(update_fields=["status"])

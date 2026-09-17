@@ -1,3 +1,29 @@
+# Production stack.
+#
+# One backend deployable, one frontend deployable, PostgreSQL, Redis, a Celery
+# worker and a beat scheduler. No orchestrator, no service mesh, nothing that
+# needs a second person to operate.
+#
+# Images are referenced by tag, not built here, so what runs in production is
+# the artefact CI produced and tested — not a rebuild on the VPS that may
+# resolve different dependencies. Set IMAGE_TAG to deploy; set it back to the
+# previous value to roll back.
+#
+# Migration is a separate one-shot service. It never runs automatically:
+#
+#   docker compose -f docker-compose.prod.yml run --rm migrate
+#
+# See DEPLOYMENT.md for the full ordering, including the pre-deploy backup.
+
+x-backend-env: &backend-env
+  env_file:
+    - ./backend/.env
+  environment:
+    POSTGRES_HOST: db
+    POSTGRES_PORT: "5432"
+    REDIS_URL: redis://redis:6379/0
+    CELERY_BROKER_URL: redis://redis:6379/1
+
 services:
   db:
     image: postgres:16-alpine
@@ -8,35 +34,103 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     volumes:
       - postgres_data:/var/lib/postgresql/data
+      - ./backups:/backups
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
       interval: 10s
       timeout: 5s
       retries: 5
+    # Not published to the host. The only things that need the database are on
+    # this network already.
+    expose:
+      - "5432"
 
-  backend:
-    build:
-      context: ./backend
+  redis:
+    image: redis:7-alpine
     restart: unless-stopped
-    env_file:
-      - ./backend/.env
+    # Persist the queue: a restart with jobs in flight should not silently drop
+    # a customer's order confirmation.
+    command: >-
+      redis-server
+      --appendonly yes
+      --save 60 1000
+      --maxmemory 256mb
+      --maxmemory-policy noeviction
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    expose:
+      - "6379"
+
+  # One-shot. Run explicitly, before starting a new backend version.
+  migrate:
+    image: ${BACKEND_IMAGE:-paknutrition-backend}:${IMAGE_TAG:-latest}
+    <<: *backend-env
+    command: ["migrate"]
     depends_on:
       db:
         condition: service_healthy
+    restart: "no"
+    profiles: ["tools"]
+
+  backend:
+    image: ${BACKEND_IMAGE:-paknutrition-backend}:${IMAGE_TAG:-latest}
+    <<: *backend-env
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     volumes:
-      - static_data:/app/staticfiles
+      - media_data:/app/media
+    expose:
+      - "8000"
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8000/healthz"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+
+  worker:
+    image: ${BACKEND_IMAGE:-paknutrition-backend}:${IMAGE_TAG:-latest}
+    <<: *backend-env
+    command: ["worker"]
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
       - media_data:/app/media
     healthcheck:
-      test: ["CMD-SHELL", "python manage.py check >/dev/null 2>&1"]
-      interval: 30s
-      timeout: 10s
-      retries: 5
+      test: ["CMD-SHELL", "celery -A config inspect ping -d celery@$$HOSTNAME || exit 1"]
+      interval: 60s
+      timeout: 15s
+      retries: 3
+      start_period: 30s
+
+  beat:
+    image: ${BACKEND_IMAGE:-paknutrition-backend}:${IMAGE_TAG:-latest}
+    <<: *backend-env
+    command: ["beat"]
+    restart: unless-stopped
+    depends_on:
+      redis:
+        condition: service_healthy
+    # Exactly one. Two schedulers means every scheduled job runs twice, and for
+    # payment reconciliation that means duplicated provider calls.
+    deploy:
+      replicas: 1
 
   frontend:
-    build:
-      context: ./frontend
-      args:
-        VITE_API_BASE_URL: ${VITE_API_BASE_URL}
+    image: ${FRONTEND_IMAGE:-paknutrition-frontend}:${IMAGE_TAG:-latest}
     restart: unless-stopped
     depends_on:
       backend:
@@ -44,7 +138,6 @@ services:
     ports:
       - "80:80"
     volumes:
-      - static_data:/vol/static:ro
       - media_data:/vol/media:ro
     healthcheck:
       test: ["CMD-SHELL", "wget -q --spider http://127.0.0.1/ || exit 1"]
@@ -54,5 +147,5 @@ services:
 
 volumes:
   postgres_data:
-  static_data:
+  redis_data:
   media_data:
