@@ -109,11 +109,17 @@ class OrderApiTests(APITestCase):
 
     @patch("orders.services.send_admin_new_order_push")
     def test_create_order_triggers_admin_push_notification(self, mock_push):
-        response = self.client.post(
-            "/api/orders/",
-            {"address_id": self.address.id, "payment_method": "COD"},
-            format="json",
-        )
+        # Notifications now run in transaction.on_commit so an SMTP or Expo call
+        # cannot hold checkout row locks open, and a rolled-back checkout cannot
+        # send a confirmation for an order that does not exist. TestCase wraps
+        # each test in a transaction that never commits, so the callbacks have to
+        # be captured explicitly.
+        with self.captureOnCommitCallbacks(execute=True):
+            response = self.client.post(
+                "/api/orders/",
+                {"address_id": self.address.id, "payment_method": "COD"},
+                format="json",
+            )
 
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         mock_push.assert_called_once()
@@ -311,7 +317,9 @@ class AdminPaymentReviewTests(APITestCase):
     def test_admin_can_approve_review_payment_session(self):
         response = self.client.post(
             f"/api/admin/payment-sessions/{self.session.public_id}/action/",
-            {"action": "approve"},
+            # Manual approval overrides what the provider reported, so it must
+            # state why. The reason is stored on the session and logged.
+            {"action": "approve", "reason": "Confirmed against Safepay dashboard"},
             format="json",
         )
 

@@ -105,6 +105,7 @@ class DashboardSummarySerializer(serializers.Serializer):
     top_products = serializers.ListField()
     low_stock_products = serializers.ListField()
     recent_orders = serializers.ListField()
+    metric_definitions = serializers.DictField()
 
 
 class AdminRecentOrderSerializer(serializers.Serializer):
@@ -117,8 +118,14 @@ class AdminRecentOrderSerializer(serializers.Serializer):
 
 
 class AdminOverviewSerializer(serializers.Serializer):
+    # total_revenue and monthly_revenue are *settled* revenue — see
+    # storefront/metrics.py. They exclude pending, failed and undelivered COD.
     total_revenue = serializers.DecimalField(max_digits=12, decimal_places=2)
     monthly_revenue = serializers.DecimalField(max_digits=12, decimal_places=2)
+    settled_orders = serializers.IntegerField()
+    pending_cod_value = serializers.DecimalField(max_digits=12, decimal_places=2)
+    online_revenue = serializers.DecimalField(max_digits=12, decimal_places=2)
+    cod_revenue = serializers.DecimalField(max_digits=12, decimal_places=2)
     total_orders = serializers.IntegerField()
     pending_orders = serializers.IntegerField()
     total_customers = serializers.IntegerField()

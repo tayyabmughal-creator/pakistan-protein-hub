@@ -1,11 +1,12 @@
-from urllib.parse import urlencode
+import logging
 
-from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.db import transaction
-from django.http import HttpResponseRedirect
 from rest_framework import generics, permissions, status, views
 from rest_framework.response import Response
+
+from payments.providers.base import PaymentProviderError
+from payments.services import initiate_payment
 
 from .models import Order, PaymentSession
 from products.services import StockService
@@ -21,8 +22,9 @@ from .services import (
     OrderService,
     PaymentMethodService,
     PaymentSessionService,
-    SafepayGateway,
 )
+
+logger = logging.getLogger(__name__)
 
 
 class OrderListCreateView(generics.ListCreateAPIView):
@@ -116,9 +118,20 @@ class PaymentSessionCreateView(views.APIView):
                     payment_method=data["payment_method"],
                     promo_code=data.get("promo_code", ""),
                 )
+            # Provider handoff happens in the payments app, which also records
+            # the amount this session is expected to be paid — written before
+            # the customer can pay, so settlement verifies against a figure
+            # nothing in the payment flow can influence.
+            session = initiate_payment(session)
             return Response(PaymentSessionSerializer(session).data, status=status.HTTP_201_CREATED)
-        except Exception as exc:
+        except (ValidationError, PaymentProviderError) as exc:
             return Response({"error": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        except Exception:
+            logger.exception("Could not start an online payment session")
+            return Response(
+                {"error": "Could not start the payment. Please try again."},
+                status=status.HTTP_502_BAD_GATEWAY,
+            )
 
 
 class PaymentSessionDetailView(views.APIView):
@@ -210,89 +223,3 @@ class PromotionPreviewView(views.APIView):
             return Response(preview)
         except Exception as exc:
             return Response({"error": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
-
-
-class SafepayReturnView(views.APIView):
-    permission_classes = [permissions.AllowAny]
-
-    def _redirect(self, *, public_id="", state="failed", order_id=""):
-        params = {"state": state}
-        if public_id:
-            params["session"] = public_id
-        if order_id:
-            params["order_id"] = str(order_id)
-        return HttpResponseRedirect(f"{settings.FRONTEND_URL}/payment-status?{urlencode(params)}")
-
-    def get(self, request):
-        return self._handle_callback(request)
-
-    def post(self, request):
-        return self._handle_callback(request)
-
-    def _handle_callback(self, request):
-        payload = {}
-        payload.update({key: value for key, value in request.query_params.items()})
-        if hasattr(request, "data") and request.data:
-            payload.update({key: value for key, value in request.data.items()})
-
-        callback = SafepayGateway.extract_callback_payload(payload)
-        public_id = callback.get("public_id", "")
-
-        try:
-            SafepayGateway.verify_signature(tracker=callback.get("tracker", ""), signature=callback.get("signature", ""))
-        except ValidationError:
-            if public_id:
-                try:
-                    PaymentSessionService.cancel_session(public_id=public_id, payload=callback.get("payload", {}), failed=True)
-                except ValidationError:
-                    pass
-            return HttpResponseRedirect(
-                f"{settings.FRONTEND_URL}/payment-status?{urlencode({'state': 'failed', 'session': public_id})}"
-            )
-
-        try:
-            order = PaymentSessionService.complete_session(public_id=public_id, gateway_data=callback)
-            return HttpResponseRedirect(
-                f"{settings.FRONTEND_URL}/payment-status?{urlencode({'state': 'success', 'session': public_id, 'order_id': order.id})}"
-            )
-        except ValidationError:
-            if public_id:
-                try:
-                    PaymentSessionService.mark_review_required(
-                        public_id=public_id,
-                        payload=callback.get("payload", {}),
-                        reference=callback.get("reference", ""),
-                        tracker=callback.get("tracker", ""),
-                    )
-                except ValidationError:
-                    pass
-            return HttpResponseRedirect(
-                f"{settings.FRONTEND_URL}/payment-status?{urlencode({'state': 'review', 'session': public_id})}"
-            )
-
-
-class SafepayCancelView(views.APIView):
-    permission_classes = [permissions.AllowAny]
-
-    def get(self, request):
-        return self._handle_cancel(request)
-
-    def post(self, request):
-        return self._handle_cancel(request)
-
-    def _handle_cancel(self, request):
-        payload = {}
-        payload.update({key: value for key, value in request.query_params.items()})
-        if hasattr(request, "data") and request.data:
-            payload.update({key: value for key, value in request.data.items()})
-
-        callback = SafepayGateway.extract_callback_payload(payload)
-        public_id = callback.get("public_id", "")
-        if public_id:
-            try:
-                PaymentSessionService.cancel_session(public_id=public_id, payload=callback.get("payload", {}), failed=False)
-            except ValidationError:
-                pass
-        return HttpResponseRedirect(
-            f"{settings.FRONTEND_URL}/payment-status?{urlencode({'state': 'cancelled', 'session': public_id})}"
-        )

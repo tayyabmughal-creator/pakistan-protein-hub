@@ -79,6 +79,7 @@ INSTALLED_APPS = [
     'products',
     'cart',
     'orders',
+    'payments',
     'reviews',
     'promotions',
     'storefront',
@@ -207,7 +208,10 @@ REST_FRAMEWORK = {
     'DEFAULT_THROTTLE_RATES': {
         'anon': '100/day',
         'user': '1000/day',
-        'auth_burst': '5/min', 
+        'auth_burst': '5/min',
+        # Generous: a provider retrying a legitimate webhook must never be
+        # throttled into leaving a payment unsettled.
+        'payment_webhook': '600/hour',
     },
     'EXCEPTION_HANDLER': 'common.exceptions.custom_exception_handler',
     'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
@@ -231,6 +235,17 @@ SAFEPAY_ENV = os.environ.get('SAFEPAY_ENV', 'sandbox')
 SAFEPAY_API_KEY = os.environ.get('SAFEPAY_API_KEY', '')
 SAFEPAY_SHARED_SECRET = os.environ.get('SAFEPAY_SHARED_SECRET', '')
 SAFEPAY_SOURCE = os.environ.get('SAFEPAY_SOURCE', 'paknutrition')
+# Webhook verification. Falls back to the shared secret so an existing
+# deployment keeps working, but a dedicated webhook secret is preferred.
+# The header name and algorithm MUST be confirmed against the Safepay dashboard
+# before taking live payments — see backend/payments/providers/safepay.py.
+SAFEPAY_WEBHOOK_SECRET = os.environ.get('SAFEPAY_WEBHOOK_SECRET', '')
+SAFEPAY_WEBHOOK_SIGNATURE_HEADER = os.environ.get(
+    'SAFEPAY_WEBHOOK_SIGNATURE_HEADER', 'HTTP_X_SFPY_SIGNATURE'
+)
+SAFEPAY_WEBHOOK_SIGNATURE_ALGORITHM = os.environ.get(
+    'SAFEPAY_WEBHOOK_SIGNATURE_ALGORITHM', 'sha512'
+)
 EASYPAISA_ACCOUNT = os.environ.get('EASYPAISA_ACCOUNT', '')
 JAZZCASH_ACCOUNT = os.environ.get('JAZZCASH_ACCOUNT', '')
 BANK_ACCOUNT_TITLE = os.environ.get('BANK_ACCOUNT_TITLE', '')

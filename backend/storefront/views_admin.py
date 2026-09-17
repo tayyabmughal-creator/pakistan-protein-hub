@@ -14,6 +14,7 @@ from rest_framework.views import APIView
 from orders.models import Order, OrderItem
 from products.models import Product, Category
 from reviews.models import Review
+from . import metrics
 from .models import HomePageSettings
 from .serializers import HomePageSettingsSerializer
 
@@ -34,33 +35,35 @@ class AdminDashboardSummaryView(APIView):
     def get(self, request):
         now = timezone.now()
         month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
-        revenue_source = Order.objects.exclude(status="CANCELLED")
 
-        total_revenue = revenue_source.aggregate(
-            total=Coalesce(Sum("total_amount"), Value(Decimal("0.00")), output_field=DecimalField(max_digits=12, decimal_places=2))
-        )["total"]
-        monthly_revenue = revenue_source.filter(created_at__gte=month_start).aggregate(
-            total=Coalesce(Sum("total_amount"), Value(Decimal("0.00")), output_field=DecimalField(max_digits=12, decimal_places=2))
-        )["total"]
-        avg_order_value = revenue_source.aggregate(
-            value=Coalesce(Avg("total_amount"), Value(Decimal("0.00")), output_field=DecimalField(max_digits=12, decimal_places=2))
-        )["value"]
+        # Every figure below comes from storefront/metrics.py, which defines one
+        # settled-revenue population and publishes what it counted. Previously
+        # this view summed every non-cancelled order — including unpaid COD and
+        # failed payments — and called the result revenue.
+        settled = metrics.settled_orders()
+        all_time = metrics.revenue_summary()
+        this_month = metrics.revenue_summary(since=month_start)
+        split = metrics.payment_split()
 
         overview = {
-            "total_revenue": total_revenue,
-            "monthly_revenue": monthly_revenue,
+            "total_revenue": all_time["revenue"],
+            "monthly_revenue": this_month["revenue"],
+            "settled_orders": all_time["orders"],
+            "pending_cod_value": metrics.pending_cod_value(),
+            "online_revenue": split["online_revenue"],
+            "cod_revenue": split["cod_revenue"],
             "total_orders": Order.objects.count(),
             "pending_orders": Order.objects.filter(status="PENDING").count(),
             "total_customers": User.objects.filter(is_staff=False).count(),
             "guest_orders": Order.objects.filter(user__isnull=True).count(),
             "active_products": Product.objects.filter(is_active=True).count(),
             "low_stock_products": Product.objects.filter(stock__lte=5, is_active=True).count(),
-            "avg_order_value": avg_order_value,
+            "avg_order_value": all_time["average_order_value"],
         }
 
         start_month = (month_start - timedelta(days=150)).replace(day=1)
         revenue_trend_qs = (
-            revenue_source.filter(created_at__gte=start_month)
+            settled.filter(created_at__gte=start_month)
             .annotate(month=TruncMonth("created_at"))
             .values("month")
             .annotate(
@@ -97,8 +100,9 @@ class AdminDashboardSummaryView(APIView):
             Order.objects.values("status").annotate(count=Count("id")).order_by("status")
         )
 
+        # Same population as settled revenue, so the two widgets cannot disagree.
         top_products_qs = (
-            OrderItem.objects.exclude(order__status="CANCELLED")
+            OrderItem.objects.filter(metrics.settled_revenue_q_for_items())
             .values(name=F("product_name"))
             .annotate(
                 units_sold=Coalesce(Sum("quantity"), 0),
@@ -146,6 +150,9 @@ class AdminDashboardSummaryView(APIView):
                 "top_products": top_products,
                 "low_stock_products": low_stock_products,
                 "recent_orders": recent_orders,
+                # Shipped with the numbers so nobody has to guess what a figure
+                # counted, and so a change in definition is visible in the API.
+                "metric_definitions": metrics.METRIC_DEFINITIONS,
             }
         )
 

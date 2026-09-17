@@ -223,6 +223,21 @@ class AdminPaymentSessionSerializer(serializers.ModelSerializer):
 
 class AdminPaymentSessionActionSerializer(serializers.Serializer):
     action = serializers.ChoiceField(choices=["approve", "fail"])
+    # Approving a payment by hand overrides what the provider told us. It has to
+    # say why, and the reason is written to the session and the log.
+    reason = serializers.CharField(required=False, allow_blank=True, max_length=255)
+
+    def validate(self, attrs):
+        if attrs.get("action") == "approve" and not (attrs.get("reason") or "").strip():
+            raise serializers.ValidationError(
+                {"reason": "A reason is required when approving a payment manually."}
+            )
+        return attrs
+
+
+class AdminOrderTransitionSerializer(serializers.Serializer):
+    status = serializers.ChoiceField(choices=[code for code, _ in Order.ORDER_STATUS_CHOICES])
+    reason = serializers.CharField(required=False, allow_blank=True, max_length=255)
 
 class AdminOrderSerializer(serializers.ModelSerializer):
     items = OrderItemSerializer(many=True, read_only=True)
@@ -256,8 +271,7 @@ class AdminOrderSerializer(serializers.ModelSerializer):
 
     def get_payment_note(self, obj):
         return (obj.payment_payload or {}).get("note", "")
-    # Status is writable here
-    
+
     class Meta:
         model = Order
         fields = [
@@ -266,4 +280,18 @@ class AdminOrderSerializer(serializers.ModelSerializer):
             'items', 'subtotal_amount', 'discount_amount', 'shipping_fee', 'applied_promo_code', 'total_amount', 'shipping_address', 'payment_method',
             'payment_provider', 'payment_reference', 'payment_tracker', 'payment_note', 'payment_status', 'paid_at', 'status', 'created_at', 'updated_at'
         ]
-        read_only_fields = ['user', 'total_amount', 'shipping_address', 'payment_method', 'items', 'created_at', 'shipping_fee']
+        # Everything financial is read-only. payment_status, paid_at, the
+        # amounts, the promo code and the provider references used to be
+        # assignable through this serializer, which let any staff account mark
+        # an order paid by PATCH — with no invariant, no stock consequence and
+        # no record of who did it. `status` is read-only too: order movement
+        # goes through AdminOrderTransitionView, which validates the transition
+        # and restocks on cancellation.
+        read_only_fields = [
+            'id', 'user', 'items', 'items_count', 'created_at', 'updated_at',
+            'guest_name', 'guest_email', 'guest_phone_number',
+            'subtotal_amount', 'discount_amount', 'shipping_fee', 'total_amount',
+            'applied_promo_code', 'shipping_address', 'payment_method',
+            'payment_provider', 'payment_reference', 'payment_tracker',
+            'payment_status', 'paid_at', 'status',
+        ]

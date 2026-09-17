@@ -1,7 +1,9 @@
 import uuid
+from datetime import timedelta
 
 from django.conf import settings
 from django.db import models
+from django.utils import timezone
 from products.models import Product
 from promotions.models import Promotion
 
@@ -75,6 +77,10 @@ class PaymentSession(models.Model):
         ('SAFEPAY', 'Safepay'),
     )
 
+    #: How long a hosted checkout may stay payable. Past this, reconciliation
+    #: treats an unsettled session as abandoned.
+    PAYABLE_WINDOW = timedelta(hours=2)
+
     public_id = models.UUIDField(default=uuid.uuid4, editable=False, unique=True)
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL,
@@ -102,8 +108,32 @@ class PaymentSession(models.Model):
     checkout_url = models.URLField(blank=True)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='PENDING')
     order = models.ForeignKey(Order, null=True, blank=True, on_delete=models.SET_NULL, related_name='payment_sessions')
+    review_reason = models.CharField(max_length=255, blank=True, default='')
+    expires_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
+    class Meta:
+        constraints = [
+            # One provider tracker settles at most one session. This is what
+            # stops a signed tracker from one checkout being pointed at another.
+            # Partial, because sessions start with an empty tracker.
+            models.UniqueConstraint(
+                fields=['provider', 'gateway_tracker'],
+                condition=~models.Q(gateway_tracker=''),
+                name='orders_unique_session_gateway_tracker',
+            ),
+        ]
+        indexes = [
+            models.Index(fields=['status', 'created_at']),
+            models.Index(fields=['gateway_tracker']),
+        ]
+
     def __str__(self):
         return f"PaymentSession {self.public_id} ({self.get_status_display()})"
+
+    @property
+    def is_expired(self):
+        if self.expires_at is None:
+            return False
+        return timezone.now() >= self.expires_at
