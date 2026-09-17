@@ -521,20 +521,42 @@ online payment success + idempotent webhook · payment failure and retry ·
 
 ---
 
-## 11. Baseline measurements
+## 11. Baseline measurements, and Phase 0 result
 
-Recorded now so later claims are checkable.
+Recorded so the claims are checkable.
 
-| Metric | Value at baseline |
+| Metric | Before Phase 0 | After Phase 0 |
+| --- | --- | --- |
+| Backend tests | **36 passed** | **91 passed** |
+| Backend test paths run | `storefront` excluded — never ran | all apps, incl. `payments`, `storefront` |
+| Frontend lint | 108 errors, 16 warnings | **0 errors, 0 warnings** |
+| Frontend typecheck | **501 errors** | **0 errors** |
+| Frontend production build | passes | passes |
+| Tracked `.pyc` files | 136 | 0 |
+| Tracked DB/PII files | 2 | 0 |
+| NUL-corrupted tracked files | 5 | 0 |
+| Payment webhook endpoints | **0** | 1, signature-verified |
+| Paths that can write `payment_status=PAID` | any staff `PATCH`, any browser callback | 2, both audited |
+| Secret scanning | none | CI gate + pre-commit hook |
+| CI gates before deploy | none | 4 jobs, deploy blocked on all |
+| `requirements.txt` | `Django>=4.2`, rest unpinned | fully pinned |
+| npm advisories | 23 (17 high) | 4 (1 high, dev-only) |
+
+### Phase 0 status by item
+
+| Item | Status |
 | --- | --- |
-| Backend tests | **36 passed**, 1 warning (`pytest -q`) |
-| Backend test paths run | `users products cart orders reviews promotions` — `storefront` **excluded** |
-| Frontend lint | **111 errors, 16 warnings** (127 problems) |
-| Frontend typecheck | **501 error lines** (`tsc --noEmit`) |
-| Tracked `.pyc` files | 136 |
-| Tracked DB/PII files | 2 (`db.sqlite3`, `data.json`) |
-| NUL-corrupted tracked files | 5 |
-| Secrets found in Git history | 4 distinct (Brevo SMTP, `SECRET_KEY`, DB password, legacy `JWT_SECRET`) |
-| Payment webhook endpoints | **0** |
-| `PaymentTransaction` records | model does not exist |
-| Django version resolved from `requirements.txt` | 5.2.17 (unpinned; `Django>=4.2`) |
+| **A. Repository exposure** | Code side **done**. Credential rotation and the Git-history decision are **owner actions** — `SECURITY_REMEDIATION.md` §3, §4. |
+| **B. Safepay flaw** | **Done.** Exploit closed and pinned by regression test. Webhook signature scheme **unverified against live provider docs** — see §10 R-8. |
+| **C. Revenue correctness** | **Done.** Settled-revenue definition, payment split, definitions published in the API. |
+| **D. Cart repricing** | **Done.** Server-authoritative pricing under row locks; coupon concurrency fixed with a DB constraint behind it. |
+| **E. Frontend baseline** | **Done.** Zero errors, zero warnings, zero type errors, CI-enforced. |
+| **F. Writable admin financials** | **Done.** Read-only serializer + validated transition endpoint. |
+
+### Verified by live smoke test
+
+- Unsigned webhook → `400`, rejected, nothing settled.
+- Browser return asserting `state=paid&status=success` → redirect only, no order created.
+- Legacy callback path still routes to the new observational view.
+- Migrations applied cleanly against a copy of the existing dev database,
+  including both data migrations.
