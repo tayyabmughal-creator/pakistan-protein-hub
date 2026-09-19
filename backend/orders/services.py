@@ -11,11 +11,12 @@ Two rules govern everything here:
 """
 
 import logging
+import uuid
 from decimal import Decimal, ROUND_HALF_UP
 
 from django.conf import settings
 from django.core.exceptions import ValidationError
-from django.db import transaction
+from django.db import models, transaction
 from django.db.models import F
 from django.utils import timezone
 
@@ -27,7 +28,14 @@ from products.services import StockService
 from promotions.models import Promotion
 from users.models import Address
 
-from .models import Order, OrderHistory, OrderItem, PaymentSession
+from .models import (
+    Order,
+    OrderHistory,
+    OrderItem,
+    PaymentSession,
+    ReturnItem,
+    ReturnRequest,
+)
 from .notifications import (
     send_admin_new_order_push,
     send_admin_payment_review_push,
@@ -507,12 +515,41 @@ class OrderService:
             if reservation_reference is not None:
                 # Convert the held stock into a sale, now that there is an order
                 # to attribute it to.
-                inventory_services.commit(reference=reservation_reference, order=order)
-                order.inventory_committed = True
-                order.save(update_fields=["inventory_committed"])
-            else:
-                order.inventory_committed = True
-                order.save(update_fields=["inventory_committed"])
+                committed = inventory_services.commit(
+                    reference=reservation_reference, order=order
+                )
+
+                if not committed:
+                    # The hold is gone — it expired while the customer was at
+                    # the bank's page, or staff approved a held payment days
+                    # later. The sale still happened, so the goods must still
+                    # leave inventory. Without this the order ships stock that
+                    # was never drawn down and the shop oversells it again.
+                    logger.warning(
+                        "No active reservation at settlement; deducting directly",
+                        extra={"order_id": order.id, "reference": reservation_reference},
+                    )
+                    for item in order.items.select_related("variant"):
+                        if item.variant_id is None:
+                            continue
+                        StockService.deduct_stock(
+                            item.product_id,
+                            item.quantity,
+                            reference=f"order:{order.id}",
+                            order=order,
+                        )
+
+                # Refresh the legacy Product.stock column the current storefront
+                # still reads. The non-reserved path does this inside
+                # StockService.deduct_stock; this path has to do it explicitly.
+                from products.services import sync_variant_products
+
+                sync_variant_products(
+                    [item.variant for item in order.items.select_related("variant") if item.variant_id]
+                )
+
+            order.inventory_committed = True
+            order.save(update_fields=["inventory_committed"])
 
             promotion = checkout_data["promotion"]
             if promotion:
@@ -624,6 +661,9 @@ class OrderService:
             checkout_data=checkout_data,
             payment_method=session.payment_method,
             payment_status="PAID",
+            # The stock was reserved when the session was created. Commit that
+            # hold rather than deducting again, which would sell it twice.
+            reservation_reference=PaymentSessionService.reservation_reference(session),
             payment_provider=session.provider,
             payment_reference=gateway_data.get("reference", ""),
             payment_tracker=gateway_data.get("tracker", ""),
@@ -962,7 +1002,7 @@ class PaymentSessionService:
         if payment_method != "SAFEPAY":
             raise ValidationError("Unsupported online payment method.")
 
-        return PaymentSession.objects.create(
+        session = PaymentSession.objects.create(
             user=checkout_data["user"],
             guest_name=checkout_data["guest_name"],
             guest_email=checkout_data["guest_email"],
@@ -979,6 +1019,37 @@ class PaymentSessionService:
             provider="SAFEPAY",
             expires_at=timezone.now() + PaymentSession.PAYABLE_WINDOW,
         )
+
+        # Hold the stock for the duration of the payment. Without this there are
+        # only two options and both are wrong: deduct now and lose stock to
+        # every abandoned payment, or deduct on success and sell the last tub to
+        # everyone who reaches the payment page.
+        #
+        # The hold expires (PaymentSession.PAYABLE_WINDOW), so an abandoned
+        # checkout cannot keep goods out of the catalogue indefinitely.
+        reference = cls.reservation_reference(session)
+        for item in checkout_data["items_snapshot"]:
+            product = (
+                Product.objects.filter(id=item.get("product_id"))
+                .prefetch_related("variants")
+                .first()
+            )
+            variant = product.default_variant if product else None
+            if variant is None:
+                continue
+            inventory_services.reserve(
+                variant=variant,
+                quantity=item["quantity"],
+                reference=reference,
+                ttl=PaymentSession.PAYABLE_WINDOW,
+            )
+
+        return session
+
+    @staticmethod
+    def reservation_reference(session):
+        """The key stock is held under for this checkout."""
+        return f"session:{session.public_id}"
 
     @classmethod
     def mark_review_required(cls, *, public_id, payload=None, reference="", tracker="", reason=""):
@@ -1027,6 +1098,12 @@ class PaymentSessionService:
         if payload:
             session.gateway_payload = payload
         session.save(update_fields=["status", "gateway_payload", "updated_at"])
+
+        # Give the stock back. The customer is not buying it.
+        inventory_services.release(
+            reference=cls.reservation_reference(session),
+            reason="Payment cancelled" if not failed else "Payment failed",
+        )
         return session
 
     @classmethod
@@ -1097,3 +1174,238 @@ class PaymentSessionService:
                 return session
 
             raise ValidationError("Unsupported review action.")
+
+
+class ReturnService:
+    """Goods coming back, and money going back — tracked separately.
+
+    They are different events. A customer may return goods and receive a
+    replacement rather than a refund. A refund may be issued for a damaged item
+    the customer was told to keep. Stock going back on the shelf is a physical
+    fact; a refund is a financial one. Collapsing them is how a shop refunds for
+    inventory it never received.
+    """
+
+    @staticmethod
+    def _next_reference():
+        return f"RET-{uuid.uuid4().hex[:10].upper()}"
+
+    @classmethod
+    def request_return(cls, *, order, lines, reason="OTHER", customer_note="", actor=None):
+        """Open a return. ``lines`` is ``[{"order_item_id": int, "quantity": int}]``."""
+        if order.fulfilment_status not in {
+            Order.FULFILMENT_SHIPPED,
+            Order.FULFILMENT_DELIVERED,
+        }:
+            raise ValidationError(
+                "Only orders that have shipped or been delivered can be returned."
+            )
+        if not lines:
+            raise ValidationError("Select at least one item to return.")
+
+        with transaction.atomic():
+            request = ReturnRequest.objects.create(
+                order=order,
+                reference=cls._next_reference(),
+                reason=reason,
+                customer_note=customer_note,
+            )
+
+            for line in lines:
+                item = order.items.filter(pk=line["order_item_id"]).first()
+                if item is None:
+                    raise ValidationError("That item is not part of this order.")
+
+                quantity = int(line["quantity"])
+                if quantity < 1:
+                    raise ValidationError("Return quantity must be at least one.")
+
+                # Cannot send back more than was bought, counting anything
+                # already returned on an earlier request.
+                already = (
+                    ReturnItem.objects.filter(order_item=item)
+                    .exclude(return_request__status__in=[
+                        ReturnRequest.STATUS_REJECTED, ReturnRequest.STATUS_CANCELLED
+                    ])
+                    .aggregate(total=models.Sum("quantity"))["total"]
+                    or 0
+                )
+                if already + quantity > item.quantity:
+                    remaining = item.quantity - already
+                    raise ValidationError(
+                        f"Only {remaining} of {item.product_name} can still be returned."
+                    )
+
+                ReturnItem.objects.create(
+                    return_request=request, order_item=item, quantity=quantity
+                )
+
+            OrderTransitionService._record(
+                order,
+                kind=OrderHistory.KIND_RETURN,
+                to_status=ReturnRequest.STATUS_REQUESTED,
+                actor=actor,
+                note=f"Return {request.reference} requested: {reason}",
+                is_customer_visible=True,
+            )
+            return request
+
+    @classmethod
+    def approve(cls, *, return_request, actor=None, note=""):
+        if return_request.status != ReturnRequest.STATUS_REQUESTED:
+            raise ValidationError("Only a requested return can be approved.")
+
+        return_request.status = ReturnRequest.STATUS_APPROVED
+        return_request.staff_note = note[:1000]
+        return_request.save(update_fields=["status", "staff_note"])
+
+        OrderTransitionService._record(
+            return_request.order,
+            kind=OrderHistory.KIND_RETURN,
+            from_status=ReturnRequest.STATUS_REQUESTED,
+            to_status=ReturnRequest.STATUS_APPROVED,
+            actor=actor,
+            note=note or f"Return {return_request.reference} approved.",
+            is_customer_visible=True,
+        )
+        return return_request
+
+    @classmethod
+    def reject(cls, *, return_request, actor=None, reason=""):
+        if not reason.strip():
+            raise ValidationError("A reason is required when rejecting a return.")
+        if return_request.status not in {
+            ReturnRequest.STATUS_REQUESTED, ReturnRequest.STATUS_APPROVED
+        }:
+            raise ValidationError("This return can no longer be rejected.")
+
+        return_request.status = ReturnRequest.STATUS_REJECTED
+        return_request.staff_note = reason[:1000]
+        return_request.resolved_at = timezone.now()
+        return_request.resolved_by = actor
+        return_request.save(
+            update_fields=["status", "staff_note", "resolved_at", "resolved_by"]
+        )
+
+        OrderTransitionService._record(
+            return_request.order,
+            kind=OrderHistory.KIND_RETURN,
+            to_status=ReturnRequest.STATUS_REJECTED,
+            actor=actor,
+            note=reason,
+            is_customer_visible=True,
+        )
+        return return_request
+
+    @classmethod
+    def receive_goods(cls, *, return_request, restock_decisions, actor=None):
+        """Record what physically came back, and put back only what is sellable.
+
+        ``restock_decisions`` is ``{return_item_id: bool}``. Per-line, because a
+        decision that covers the whole return would force the same answer for a
+        resealed tub and a leaking one.
+        """
+        if return_request.status != ReturnRequest.STATUS_APPROVED:
+            raise ValidationError("Goods can only be received for an approved return.")
+
+        with transaction.atomic():
+            restocked_any = False
+
+            for item in return_request.items.select_related("order_item__variant"):
+                restock = bool(restock_decisions.get(item.pk, False))
+                item.restock = restock
+
+                if restock and item.order_item.variant_id:
+                    inventory_services.return_to_stock(
+                        variant=item.order_item.variant,
+                        quantity=item.quantity,
+                        order=return_request.order,
+                        actor=actor,
+                        reason=f"Return {return_request.reference}",
+                        reference=f"return:{return_request.reference}",
+                    )
+                    item.restocked_at = timezone.now()
+                    restocked_any = True
+
+                item.save(update_fields=["restock", "restocked_at"])
+
+            return_request.status = ReturnRequest.STATUS_RECEIVED
+            return_request.save(update_fields=["status"])
+
+            if restocked_any:
+                from products.services import sync_variant_products
+
+                sync_variant_products(
+                    [
+                        item.order_item.variant
+                        for item in return_request.items.select_related("order_item__variant")
+                        if item.order_item.variant_id
+                    ]
+                )
+
+            OrderTransitionService._record(
+                return_request.order,
+                kind=OrderHistory.KIND_RETURN,
+                to_status=ReturnRequest.STATUS_RECEIVED,
+                actor=actor,
+                note=f"Goods received for return {return_request.reference}.",
+                is_customer_visible=True,
+            )
+            return return_request
+
+    @classmethod
+    def record_refund(cls, *, return_request, amount, actor=None, note=""):
+        """Record money returned to the customer.
+
+        Deliberately independent of whether the goods came back. Marking a
+        refund does not move stock, and receiving stock does not move money.
+        """
+        amount = _to_money(amount)
+        if amount <= 0:
+            raise ValidationError("A refund must be for a positive amount.")
+
+        order = return_request.order
+        already_refunded = order.refunded_amount or Decimal("0.00")
+        if already_refunded + amount > order.total_amount:
+            remaining = order.total_amount - already_refunded
+            raise ValidationError(
+                f"That would refund more than the order was worth. "
+                f"At most {remaining} remains refundable."
+            )
+
+        with transaction.atomic():
+            return_request.refund_amount = amount
+            return_request.refunded_at = timezone.now()
+            return_request.save(update_fields=["refund_amount", "refunded_at"])
+
+            order.refunded_amount = already_refunded + amount
+            new_status = (
+                Order.PAYMENT_REFUNDED
+                if order.refunded_amount >= order.total_amount
+                else Order.PAYMENT_PARTIALLY_REFUNDED
+            )
+            previous = order.payment_status
+            order.payment_status = new_status
+            order.save(update_fields=["refunded_amount", "payment_status", "updated_at"])
+
+            OrderTransitionService._record(
+                order,
+                kind=OrderHistory.KIND_REFUND,
+                from_status=previous,
+                to_status=new_status,
+                actor=actor,
+                note=note or f"Refunded {amount} for return {return_request.reference}.",
+                is_customer_visible=True,
+            )
+            return return_request
+
+    @classmethod
+    def complete(cls, *, return_request, actor=None):
+        if return_request.status != ReturnRequest.STATUS_RECEIVED:
+            raise ValidationError("Only a received return can be completed.")
+
+        return_request.status = ReturnRequest.STATUS_COMPLETED
+        return_request.resolved_at = timezone.now()
+        return_request.resolved_by = actor
+        return_request.save(update_fields=["status", "resolved_at", "resolved_by"])
+        return return_request

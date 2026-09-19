@@ -338,6 +338,17 @@ def _apply_non_paid(txn: PaymentTransaction, status: ProviderStatus, *, source: 
             update_fields=["status", "gateway_reference", "gateway_payload", "updated_at"]
         )
 
+        # The customer is not buying it, so stop holding it for them. Without
+        # this, every failed payment permanently removes stock from sale until
+        # the reservation expires.
+        from inventory import services as inventory_services
+        from orders.services import PaymentSessionService
+
+        inventory_services.release(
+            reference=PaymentSessionService.reservation_reference(session),
+            reason=f"Payment {status.status.lower()}",
+        )
+
     return SettlementResult(
         outcome="recorded",
         transaction=txn,

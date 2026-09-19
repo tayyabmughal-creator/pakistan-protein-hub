@@ -291,8 +291,13 @@ class WebhookSettlementTests(TestCase):
         self.txn.refresh_from_db()
         self.assertEqual(self.txn.status, PaymentTransaction.STATUS_INITIATED)
 
-    def test_paid_but_out_of_stock_keeps_the_payment_and_flags_review(self):
-        """Money taken must never be silently discarded because stock ran out."""
+    def test_the_reservation_protects_a_paying_customer_from_a_stock_change(self):
+        """Stock held for a checkout stays held, even if staff zero the product.
+
+        This is what reservations are for. The customer's units were set aside
+        when they started paying, so an admin editing stock mid-payment cannot
+        strand a completed purchase.
+        """
         self.product.stock = 0
         self.product.save(update_fields=["stock"])
 
@@ -302,12 +307,44 @@ class WebhookSettlementTests(TestCase):
             reference="sfpy-ref-11",
             event_id="evt-11",
         )
-        response = self.post_webhook(body)
+        with self.captureOnCommitCallbacks(execute=True):
+            response = self.post_webhook(body)
 
         self.assertEqual(response.status_code, 200)
         self.txn.refresh_from_db()
         self.session.refresh_from_db()
         self.assertEqual(self.txn.status, PaymentTransaction.STATUS_PAID)
-        self.assertEqual(self.session.status, "REVIEW")
-        self.assertIn("order creation failed", self.txn.failure_reason)
-        self.assertEqual(Order.objects.count(), 0)
+        self.assertEqual(self.session.status, "COMPLETED")
+        self.assertEqual(Order.objects.count(), 1)
+
+    def test_a_verified_payment_with_no_stock_at_all_is_held_for_review(self):
+        """Money taken must never be silently discarded because it cannot ship.
+
+        The genuine failure case: no reservation survives (it expired, or the
+        session predates reservations) and there is nothing on the shelf.
+        """
+        from payments.tests.factories import make_session, make_transaction
+
+        product = make_product(stock=0, slug="pn-no-stock", name="No Stock Whey")
+        session = make_session(
+            product=product, tracker="tracker-empty", reserve_stock=False
+        )
+        txn = make_transaction(session, tracker="tracker-empty")
+
+        body = webhook_body(
+            tracker="tracker-empty",
+            amount=session.total_amount,
+            reference="sfpy-ref-empty",
+            event_id="evt-empty",
+        )
+        response = self.post_webhook(body)
+
+        self.assertEqual(response.status_code, 200)
+        txn.refresh_from_db()
+        session.refresh_from_db()
+
+        # Paid, because the customer was charged. Parked, because it cannot ship.
+        self.assertEqual(txn.status, PaymentTransaction.STATUS_PAID)
+        self.assertEqual(session.status, "REVIEW")
+        self.assertIn("order creation failed", txn.failure_reason)
+        self.assertFalse(Order.objects.filter(items__sku=product.variants.get().sku).exists())

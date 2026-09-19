@@ -8,6 +8,7 @@ from decimal import Decimal
 from django.conf import settings
 from django.utils import timezone
 
+from inventory import services as inventory_services
 from orders.models import PaymentSession
 from payments.models import PKR, PaymentTransaction
 from products.models import Category, Product
@@ -31,14 +32,16 @@ def make_product(*, name="Whey Gold Standard", price="12000.00", stock=10, slug=
     )
 
 
-def make_session(*, product, quantity=1, tracker="", total=None, status="PENDING"):
+def make_session(
+    *, product, quantity=1, tracker="", total=None, status="PENDING", reserve_stock=True
+):
     """A pending online-checkout session with a priced item snapshot."""
     unit_price = Decimal(product.final_price)
     subtotal = unit_price * quantity
     shipping = Decimal("0.00") if subtotal > Decimal("5000.00") else Decimal("250.00")
     total_amount = Decimal(total) if total is not None else subtotal + shipping
 
-    return PaymentSession.objects.create(
+    session = PaymentSession.objects.create(
         guest_name="Test Customer",
         guest_email="customer@example.com",
         guest_phone_number="03001234567",
@@ -62,6 +65,20 @@ def make_session(*, product, quantity=1, tracker="", total=None, status="PENDING
         status=status,
         expires_at=timezone.now() + PaymentSession.PAYABLE_WINDOW,
     )
+
+    # Mirror the real flow: creating an online checkout session holds the stock,
+    # and settlement commits that hold rather than deducting a second time.
+    if reserve_stock:
+        variant = product.default_variant
+        if variant is not None:
+            inventory_services.reserve(
+                variant=variant,
+                quantity=quantity,
+                reference=f"session:{session.public_id}",
+                ttl=PaymentSession.PAYABLE_WINDOW,
+            )
+
+    return session
 
 
 def make_transaction(session, *, tracker, reference="", status=PaymentTransaction.STATUS_INITIATED):
