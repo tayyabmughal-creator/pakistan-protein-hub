@@ -80,6 +80,7 @@ INSTALLED_APPS = [
     'common',
     'users',
     'products',
+    'inventory',
     'cart',
     'orders',
     'payments',
