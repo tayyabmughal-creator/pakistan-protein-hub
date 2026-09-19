@@ -274,7 +274,13 @@ def _lock_transaction(provider_key, status: ProviderStatus):
     initiation. A caller-supplied identifier is never consulted — that is the
     precise hole this replaces.
     """
-    queryset = PaymentTransaction.objects.select_for_update().select_related("session", "order")
+    # of=("self",): select_related on a nullable FK becomes a LEFT OUTER JOIN,
+    # and PostgreSQL refuses FOR UPDATE on the nullable side of one. Locking
+    # only the transaction row is also the correct scope — the joined rows are
+    # read here, not modified.
+    queryset = PaymentTransaction.objects.select_for_update(of=("self",)).select_related(
+        "session", "order"
+    )
 
     txn = queryset.filter(
         provider=provider_key, provider_reference=status.provider_reference
@@ -351,9 +357,11 @@ def _settle_paid(txn: PaymentTransaction, *, source: str) -> SettlementResult:
         txn.save()
         return SettlementResult(outcome="mismatch", transaction=txn, detail=txn.failure_reason)
 
-    session = PaymentSession.objects.select_for_update().select_related(
-        "promotion", "user", "order"
-    ).get(pk=session.pk)
+    session = (
+        PaymentSession.objects.select_for_update(of=("self",))
+        .select_related("promotion", "user", "order")
+        .get(pk=session.pk)
+    )
 
     if session.status == "COMPLETED" and session.order_id:
         txn.status = PaymentTransaction.STATUS_PAID

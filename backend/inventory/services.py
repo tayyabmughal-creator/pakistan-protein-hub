@@ -26,7 +26,7 @@ import logging
 from datetime import timedelta
 
 from django.core.exceptions import ValidationError
-from django.db import transaction
+from django.db import IntegrityError, OperationalError, transaction
 from django.db.models import F, Sum
 from django.utils import timezone
 
@@ -38,6 +38,62 @@ logger = logging.getLogger(__name__)
 #: enough for a customer to finish at a bank's OTP page, short enough that an
 #: abandoned attempt does not keep the last tub out of the catalogue.
 RESERVATION_TTL = timedelta(minutes=30)
+
+
+#: How many times to re-run a transaction that PostgreSQL aborted for deadlock.
+MAX_DEADLOCK_RETRIES = 4
+
+
+def retry_on_deadlock(func):
+    """Re-run a transaction that PostgreSQL aborted to break a deadlock.
+
+    A deadlock here is not a correctness failure — it is PostgreSQL doing its
+    job. Stock operations touch a balance row, a reservation row, a movement
+    row and, through foreign keys, the shared location row. PostgreSQL takes a
+    ``FOR KEY SHARE`` lock on the parent of every foreign key it writes, so a
+    handful of concurrent operations against the *same location* can acquire
+    those locks in different orders and form a cycle. One transaction is
+    aborted; the invariants are never violated.
+
+    What is not acceptable is the customer seeing that. A deadlock means "try
+    again", so this retries with a short escalating backoff and a little jitter,
+    and only re-raises if contention genuinely does not clear.
+
+    Only retries when this is the outermost transaction. Inside a caller's
+    ``atomic`` block the whole transaction is already doomed, so retrying here
+    would re-run against a connection that can only error — the outer caller has
+    to handle it.
+    """
+    import functools
+    import random
+    import time
+
+    @functools.wraps(func)
+    def wrapper(*args, **kwargs):
+        if transaction.get_connection().in_atomic_block:
+            return func(*args, **kwargs)
+
+        for attempt in range(MAX_DEADLOCK_RETRIES):
+            try:
+                return func(*args, **kwargs)
+            except OperationalError as exc:
+                if "deadlock detected" not in str(exc).lower():
+                    raise
+                if attempt == MAX_DEADLOCK_RETRIES - 1:
+                    logger.error(
+                        "Stock operation still deadlocking after %s attempts",
+                        MAX_DEADLOCK_RETRIES,
+                        extra={"operation": func.__name__},
+                    )
+                    raise
+                delay = (0.05 * (2**attempt)) + random.uniform(0, 0.05)
+                logger.info(
+                    "Deadlock on stock operation; retrying",
+                    extra={"operation": func.__name__, "attempt": attempt + 1},
+                )
+                time.sleep(delay)
+
+    return wrapper
 
 
 class InsufficientStock(ValidationError):
@@ -71,15 +127,43 @@ def get_location(location=None):
 
 
 def _balance_for_update(variant, location):
-    """Fetch and lock the balance, creating it if this variant is new here.
+    """Fetch and lock the balance, creating it only if it genuinely does not exist.
 
-    get_or_create then re-select is deliberate: the row must be locked, and a
-    row created in this transaction is already effectively locked, so the second
-    select is cheap and makes the lock unconditional.
+    Locking first and creating second is deliberate, and was arrived at by
+    watching a real deadlock.
+
+    The obvious version — ``get_or_create`` then ``select_for_update`` — puts an
+    INSERT attempt in the path of *every* call. Under concurrency, two
+    transactions inserting the same ``(variant, location)`` both take a lock on
+    the unique index, and each ends up waiting on the other's transaction to
+    finish rather than on a row. Combine that with a third transaction already
+    holding the balance row and PostgreSQL reports a deadlock, which is exactly
+    what ``test_concurrent_sell_and_adjust_never_produces_negative_stock``
+    caught.
+
+    Balances almost always exist — ``ensure_default_variant`` opens one when the
+    product is created. So take the row lock directly, and treat creation as the
+    rare path, with the unique constraint as the arbiter if two callers race it.
     """
-    InventoryBalance.objects.get_or_create(
-        variant=variant, location=location, defaults={"on_hand": 0, "reserved": 0}
-    )
+    try:
+        return InventoryBalance.objects.select_for_update().get(
+            variant=variant, location=location
+        )
+    except InventoryBalance.DoesNotExist:
+        pass
+
+    try:
+        # A nested atomic block so that losing this race does not mark the
+        # outer transaction as broken.
+        with transaction.atomic():
+            InventoryBalance.objects.create(
+                variant=variant, location=location, on_hand=0, reserved=0
+            )
+    except IntegrityError:
+        # Another transaction created it first, which is fine — that is what the
+        # unique constraint is for.
+        pass
+
     return InventoryBalance.objects.select_for_update().get(variant=variant, location=location)
 
 
@@ -120,6 +204,7 @@ def _post_movement(
     )
 
 
+@retry_on_deadlock
 @transaction.atomic
 def receive_stock(*, variant, quantity, location=None, actor=None, reason="", reference=""):
     """Stock arrived from a supplier."""
@@ -143,6 +228,7 @@ def receive_stock(*, variant, quantity, location=None, actor=None, reason="", re
     return balance
 
 
+@retry_on_deadlock
 @transaction.atomic
 def adjust_stock(*, variant, delta, movement_type, location=None, actor=None, reason="", reference=""):
     """Correct a balance by hand: damage, write-off, stocktake.
@@ -215,6 +301,7 @@ def set_counted_quantity(*, variant, counted, location=None, actor=None, reason=
 # ---------------------------------------------------------------------------
 
 
+@retry_on_deadlock
 @transaction.atomic
 def reserve(*, variant, quantity, reference, location=None, order=None, ttl=RESERVATION_TTL):
     """Hold stock for a checkout. Idempotent per (reference, variant).
@@ -260,6 +347,7 @@ def reserve(*, variant, quantity, reference, location=None, order=None, ttl=RESE
     return reservation
 
 
+@retry_on_deadlock
 @transaction.atomic
 def commit(*, reference, order=None, actor=None):
     """Convert every active reservation for `reference` into a sale.
@@ -268,9 +356,13 @@ def commit(*, reference, order=None, actor=None):
     Idempotent: a duplicate webhook finds nothing active and sells nothing.
     """
     reservations = list(
-        StockReservation.objects.select_for_update()
+        StockReservation.objects.select_for_update(of=("self",))
         .filter(reference=reference, status=StockReservation.ACTIVE)
         .select_related("variant", "location")
+        # Deterministic order, so two transactions touching overlapping sets of
+        # variants always take the balance locks in the same sequence and cannot
+        # build a cycle between them.
+        .order_by("variant_id")
     )
     if not reservations:
         return []
@@ -319,13 +411,15 @@ def commit(*, reference, order=None, actor=None):
     return committed
 
 
+@retry_on_deadlock
 @transaction.atomic
 def release(*, reference, reason="", status=StockReservation.RELEASED):
     """Give back stock held for `reference`. Idempotent."""
     reservations = list(
-        StockReservation.objects.select_for_update()
+        StockReservation.objects.select_for_update(of=("self",))
         .filter(reference=reference, status=StockReservation.ACTIVE)
         .select_related("variant", "location")
+        .order_by("variant_id")
     )
     if not reservations:
         return []
@@ -349,6 +443,7 @@ def release(*, reference, reason="", status=StockReservation.RELEASED):
     return reservations
 
 
+@retry_on_deadlock
 @transaction.atomic
 def return_to_stock(*, variant, quantity, location=None, order=None, actor=None, reason="", reference=""):
     """A customer sent goods back and they are sellable again.
@@ -374,6 +469,7 @@ def return_to_stock(*, variant, quantity, location=None, order=None, actor=None,
     return balance
 
 
+@retry_on_deadlock
 @transaction.atomic
 def restock_cancelled(*, variant, quantity, location=None, order=None, actor=None, reference=""):
     """An order that had already been committed is cancelled. Put it back."""

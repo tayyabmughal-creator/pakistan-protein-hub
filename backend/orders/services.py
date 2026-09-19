@@ -21,12 +21,13 @@ from django.utils import timezone
 
 from cart.models import Cart
 from common.dispatch import enqueue
+from inventory import services as inventory_services
 from products.models import Product
 from products.services import StockService
 from promotions.models import Promotion
 from users.models import Address
 
-from .models import Order, OrderItem, PaymentSession
+from .models import Order, OrderHistory, OrderItem, PaymentSession
 from .notifications import (
     send_admin_new_order_push,
     send_admin_payment_review_push,
@@ -412,8 +413,25 @@ class OrderService:
         paid_at=None,
         order_status="PENDING",
         clear_cart=False,
+        fulfilment_status=None,
+        sales_channel=Order.CHANNEL_ONLINE,
+        reservation_reference=None,
     ):
         with transaction.atomic():
+            # Cash on delivery is money owed, not money received. Saying
+            # PENDING for both a prepaid order awaiting a webhook and a COD
+            # parcel awaiting a rider is what let unpaid parcels be counted as
+            # revenue.
+            if payment_method == "COD" and payment_status == "PENDING":
+                payment_status = Order.PAYMENT_COD_PENDING
+
+            if fulfilment_status is None:
+                fulfilment_status = (
+                    Order.FULFILMENT_CONFIRMED
+                    if order_status == "CONFIRMED"
+                    else Order.FULFILMENT_PENDING_CONFIRMATION
+                )
+
             order = Order.objects.create(
                 user=checkout_data["user"],
                 guest_name=checkout_data["guest_name"],
@@ -433,23 +451,68 @@ class OrderService:
                 payment_payload=payment_payload or {},
                 payment_status=payment_status,
                 paid_at=paid_at,
+                fulfilment_status=fulfilment_status,
+                sales_channel=sales_channel,
+                confirmed_at=timezone.now() if fulfilment_status == Order.FULFILMENT_CONFIRMED else None,
                 status=order_status,
             )
 
             for item in checkout_data["items_snapshot"]:
                 product = None
+                variant = None
                 product_id = item.get("product_id")
                 if product_id:
-                    StockService.deduct_stock(product_id, item["quantity"])
-                    product = Product.objects.filter(id=product_id).first()
+                    product = (
+                        Product.objects.filter(id=product_id)
+                        .select_related("brand_ref")
+                        .prefetch_related("variants")
+                        .first()
+                    )
+                    variant = product.default_variant if product else None
 
+                    # Stock already held by a reservation is committed by the
+                    # caller, not sold again here.
+                    if reservation_reference is None:
+                        StockService.deduct_stock(
+                            product_id, item["quantity"], reference=f"order:{order.id}", order=order
+                        )
+
+                unit_price = _to_money(item["price"])
+                quantity = item["quantity"]
+
+                # Snapshot everything the receipt needs. Reading it back through
+                # the foreign keys would let a later rename or reprice silently
+                # rewrite what this order says was bought.
                 OrderItem.objects.create(
                     order=order,
                     product=product,
+                    variant=variant,
                     product_name=item["product_name"],
-                    quantity=item["quantity"],
-                    price=_to_money(item["price"]),
+                    sku=variant.sku if variant else "",
+                    variant_description=(variant.descriptor if variant else "")[:160],
+                    brand_name=(
+                        product.brand_ref.name if product and product.brand_ref_id
+                        else (product.brand if product else "")
+                    )[:120],
+                    quantity=quantity,
+                    price=unit_price,
+                    compare_at_price=(
+                        variant.compare_at_price
+                        if variant and variant.has_genuine_discount
+                        else None
+                    ),
+                    line_total=_to_money(unit_price * quantity),
                 )
+
+            if reservation_reference is not None:
+                # Convert the held stock into a sale, now that there is an order
+                # to attribute it to.
+                inventory_services.commit(reference=reservation_reference, order=order)
+                order.inventory_committed = True
+                order.save(update_fields=["inventory_committed"])
+            else:
+                order.inventory_committed = True
+                order.save(update_fields=["inventory_committed"])
 
             promotion = checkout_data["promotion"]
             if promotion:
@@ -574,15 +637,73 @@ class OrderService:
 class OrderTransitionService:
     """The only supported way for staff to move an order.
 
-    Previously the admin order endpoint was a writable ``ModelSerializer``, so a
-    PATCH could set ``payment_status`` to PAID, rewrite ``paid_at``, or edit the
-    discount — no invariant, no stock consequence, no record of who did it. All
-    of those fields are read-only now, and movement goes through here.
+    Two independent lifecycles, because payment and fulfilment are independent
+    facts. A COD parcel ships unpaid; a prepaid order sits paid and unpacked.
+    A single status cannot describe either.
 
-    Transitions are deliberately conservative in this phase. The richer
-    payment/fulfilment split arrives with the orders rework; what matters now is
-    that the financially meaningful moves are validated rather than assignable.
+    Every transition records who did it and why, and its stock consequence is
+    explicit rather than a side effect of setting a field.
     """
+
+    #: Fulfilment transitions. Deliberately restrictive: the way to a state that
+    #: is not reachable is to go through the states in between, so the history
+    #: reflects what actually happened.
+    FULFILMENT_TRANSITIONS = {
+        Order.FULFILMENT_PENDING_CONFIRMATION: {
+            Order.FULFILMENT_CONFIRMED,
+            Order.FULFILMENT_CANCELLED,
+        },
+        Order.FULFILMENT_CONFIRMED: {
+            Order.FULFILMENT_READY_TO_PACK,
+            Order.FULFILMENT_PACKED,
+            Order.FULFILMENT_CANCELLED,
+        },
+        Order.FULFILMENT_READY_TO_PACK: {
+            Order.FULFILMENT_PACKED,
+            Order.FULFILMENT_CANCELLED,
+        },
+        Order.FULFILMENT_PACKED: {
+            Order.FULFILMENT_SHIPPED,
+            Order.FULFILMENT_READY_FOR_PICKUP,
+            Order.FULFILMENT_CANCELLED,
+        },
+        Order.FULFILMENT_READY_FOR_PICKUP: {
+            Order.FULFILMENT_DELIVERED,
+            Order.FULFILMENT_CANCELLED,
+        },
+        Order.FULFILMENT_SHIPPED: {
+            Order.FULFILMENT_DELIVERED,
+            Order.FULFILMENT_RETURNED,
+        },
+        Order.FULFILMENT_DELIVERED: {Order.FULFILMENT_RETURNED},
+        Order.FULFILMENT_CANCELLED: set(),
+        Order.FULFILMENT_RETURNED: set(),
+    }
+
+    #: Which fulfilment state sets which timestamp.
+    TIMESTAMP_FIELDS = {
+        Order.FULFILMENT_CONFIRMED: "confirmed_at",
+        Order.FULFILMENT_PACKED: "packed_at",
+        Order.FULFILMENT_SHIPPED: "shipped_at",
+        Order.FULFILMENT_DELIVERED: "delivered_at",
+        Order.FULFILMENT_CANCELLED: "cancelled_at",
+    }
+
+    #: What the legacy combined `status` should read, so the SPA and the Expo
+    #: admin keep working while they still consume it.
+    LEGACY_STATUS = {
+        Order.FULFILMENT_PENDING_CONFIRMATION: "PENDING",
+        Order.FULFILMENT_CONFIRMED: "CONFIRMED",
+        Order.FULFILMENT_READY_TO_PACK: "CONFIRMED",
+        Order.FULFILMENT_PACKED: "CONFIRMED",
+        Order.FULFILMENT_READY_FOR_PICKUP: "CONFIRMED",
+        Order.FULFILMENT_SHIPPED: "SHIPPED",
+        Order.FULFILMENT_DELIVERED: "DELIVERED",
+        Order.FULFILMENT_CANCELLED: "CANCELLED",
+        Order.FULFILMENT_RETURNED: "DELIVERED",
+    }
+
+    # -- legacy shim -------------------------------------------------------
 
     ALLOWED_TRANSITIONS = {
         "PENDING": {"CONFIRMED", "CANCELLED"},
@@ -591,9 +712,16 @@ class OrderTransitionService:
         "DELIVERED": set(),
         "CANCELLED": set(),
     }
-
-    #: Moving into one of these returns the reserved goods to sellable stock.
     RESTOCK_ON = {"CANCELLED"}
+
+    #: Legacy combined status -> the fulfilment state it now means.
+    _LEGACY_TO_FULFILMENT = {
+        "PENDING": Order.FULFILMENT_PENDING_CONFIRMATION,
+        "CONFIRMED": Order.FULFILMENT_CONFIRMED,
+        "SHIPPED": Order.FULFILMENT_SHIPPED,
+        "DELIVERED": Order.FULFILMENT_DELIVERED,
+        "CANCELLED": Order.FULFILMENT_CANCELLED,
+    }
 
     @classmethod
     def can_transition(cls, from_status, to_status):
@@ -601,48 +729,187 @@ class OrderTransitionService:
 
     @classmethod
     def transition(cls, *, order_id, to_status, actor=None, reason=""):
-        if to_status not in dict(Order.ORDER_STATUS_CHOICES):
+        """Move an order using the legacy combined vocabulary.
+
+        Kept so the current admin keeps working. Translates to the real
+        fulfilment lifecycle rather than duplicating its rules.
+        """
+        if to_status not in cls._LEGACY_TO_FULFILMENT:
             raise ValidationError(f"{to_status} is not a valid order status.")
+        return cls.transition_fulfilment(
+            order_id=order_id,
+            to_status=cls._LEGACY_TO_FULFILMENT[to_status],
+            actor=actor,
+            reason=reason,
+        )
+
+    # -- fulfilment --------------------------------------------------------
+
+    @classmethod
+    def transition_fulfilment(
+        cls, *, order_id, to_status, actor=None, reason="", courier_name="", tracking_number=""
+    ):
+        valid = dict(Order.FULFILMENT_STATUS_CHOICES)
+        if to_status not in valid:
+            raise ValidationError(f"{to_status} is not a valid fulfilment status.")
 
         with transaction.atomic():
-            try:
-                order = Order.objects.select_for_update().get(pk=order_id)
-            except Order.DoesNotExist as exc:
-                raise ValidationError("Order not found.") from exc
+            order = Order.objects.select_for_update().get(pk=order_id)
+            previous = order.fulfilment_status
 
-            if order.status == to_status:
+            if previous == to_status:
                 return order
 
-            if not cls.can_transition(order.status, to_status):
+            allowed = cls.FULFILMENT_TRANSITIONS.get(previous, set())
+            if to_status not in allowed:
+                readable = ", ".join(sorted(valid[s] for s in allowed)) or "nothing"
                 raise ValidationError(
-                    f"An order cannot move from {order.status} to {to_status}."
+                    f"An order that is {valid[previous]} can only move to: {readable}."
                 )
 
-            if to_status == "CANCELLED" and order.payment_status == "PAID":
-                # Cancelling money that has been taken is a refund decision, not
-                # a fulfilment one. Refunds arrive with the returns workflow.
-                raise ValidationError(
-                    "This order is paid. Refund it before cancelling, so the money "
-                    "and the stock are not resolved separately."
+            if to_status == Order.FULFILMENT_CANCELLED:
+                cls._cancel(order, actor=actor, reason=reason)
+
+            order.fulfilment_status = to_status
+            fields = ["fulfilment_status", "updated_at"]
+
+            timestamp_field = cls.TIMESTAMP_FIELDS.get(to_status)
+            if timestamp_field and getattr(order, timestamp_field) is None:
+                setattr(order, timestamp_field, timezone.now())
+                fields.append(timestamp_field)
+
+            if courier_name:
+                order.courier_name = courier_name
+                fields.append("courier_name")
+            if tracking_number:
+                order.tracking_number = tracking_number
+                fields.append("tracking_number")
+
+            # Cash arrives when the rider hands the parcel over. This is the
+            # moment a COD sale becomes revenue.
+            if (
+                to_status == Order.FULFILMENT_DELIVERED
+                and order.payment_method == "COD"
+                and order.payment_status == Order.PAYMENT_COD_PENDING
+            ):
+                order.payment_status = Order.PAYMENT_PAID
+                order.paid_at = timezone.now()
+                fields += ["payment_status", "paid_at"]
+                cls._record(
+                    order,
+                    kind=OrderHistory.KIND_PAYMENT,
+                    from_status=Order.PAYMENT_COD_PENDING,
+                    to_status=Order.PAYMENT_PAID,
+                    actor=actor,
+                    note="Cash collected on delivery.",
                 )
 
-            previous_status = order.status
-            if to_status in cls.RESTOCK_ON:
-                for item in order.items.exclude(product_id=None):
-                    StockService.restore_stock(item.product_id, item.quantity)
+            legacy = cls.LEGACY_STATUS.get(to_status)
+            if legacy and order.status != legacy:
+                order.status = legacy
+                fields.append("status")
 
-            order.status = to_status
-            order.save(update_fields=["status", "updated_at"])
+            order.save(update_fields=fields)
+
+            cls._record(
+                order,
+                kind=OrderHistory.KIND_FULFILMENT,
+                from_status=previous,
+                to_status=to_status,
+                actor=actor,
+                note=reason,
+                is_customer_visible=True,
+            )
 
             logger.info(
-                "Order %s moved %s → %s by %s (%s)",
-                order.id,
-                previous_status,
-                to_status,
-                getattr(actor, "email", "unknown"),
-                reason or "no reason given",
+                "Order fulfilment moved",
+                extra={
+                    "order_id": order.id,
+                    "from_status": previous,
+                    "to_status": to_status,
+                    "actor": getattr(actor, "email", "system"),
+                },
             )
             return order
+
+    @classmethod
+    def _cancel(cls, order, *, actor=None, reason=""):
+        """Undo a cancelled order's claim on stock, exactly once."""
+        if order.payment_status == Order.PAYMENT_PAID:
+            raise ValidationError(
+                "This order is paid. Refund it before cancelling, so the money and "
+                "the stock are not resolved separately."
+            )
+
+        reference = f"order:{order.id}"
+
+        if order.inventory_committed:
+            # The goods already left inventory, so put them back.
+            for item in order.items.select_related("variant"):
+                if item.variant_id is None:
+                    continue
+                inventory_services.restock_cancelled(
+                    variant=item.variant,
+                    quantity=item.quantity,
+                    order=order,
+                    actor=actor,
+                    reference=reference,
+                )
+            order.inventory_committed = False
+            order.save(update_fields=["inventory_committed"])
+        else:
+            # Still only reserved — release the hold, nothing was ever sold.
+            inventory_services.release(reference=reference, reason=reason or "Order cancelled")
+
+        if order.payment_status == Order.PAYMENT_COD_PENDING:
+            order.payment_status = Order.PAYMENT_FAILED
+            order.save(update_fields=["payment_status"])
+
+        from products.services import sync_variant_products
+
+        sync_variant_products(
+            [item.variant for item in order.items.select_related("variant") if item.variant_id]
+        )
+
+    # -- payment -----------------------------------------------------------
+
+    @classmethod
+    def record_payment_status(cls, *, order, to_status, actor=None, note=""):
+        """Move payment state, recording it. Never called for fulfilment."""
+        previous = order.payment_status
+        if previous == to_status:
+            return order
+
+        order.payment_status = to_status
+        fields = ["payment_status", "updated_at"]
+        if to_status == Order.PAYMENT_PAID and order.paid_at is None:
+            order.paid_at = timezone.now()
+            fields.append("paid_at")
+        order.save(update_fields=fields)
+
+        cls._record(
+            order,
+            kind=OrderHistory.KIND_PAYMENT,
+            from_status=previous,
+            to_status=to_status,
+            actor=actor,
+            note=note,
+        )
+        return order
+
+    # -- history -----------------------------------------------------------
+
+    @staticmethod
+    def _record(order, *, kind, from_status="", to_status="", actor=None, note="", is_customer_visible=False):
+        return OrderHistory.objects.create(
+            order=order,
+            kind=kind,
+            from_status=from_status,
+            to_status=to_status,
+            actor=actor,
+            note=(note or "")[:255],
+            is_customer_visible=is_customer_visible,
+        )
 
 
 class PaymentSessionService:
@@ -778,7 +1045,7 @@ class PaymentSessionService:
         with transaction.atomic():
             try:
                 session = (
-                    PaymentSession.objects.select_for_update()
+                    PaymentSession.objects.select_for_update(of=("self",))
                     .select_related("promotion", "user", "order")
                     .get(public_id=public_id)
                 )
