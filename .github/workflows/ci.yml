@@ -120,6 +120,22 @@ jobs:
         working-directory: backend
         run: python manage.py migrate --noinput
 
+      - name: Data integrity audit
+        working-directory: backend
+        # Catches what is legal in the database but wrong for the business:
+        # products with no sellable variant, balances that disagree with the
+        # stock ledger, paid orders that never drew down stock.
+        run: python manage.py audit_legacy_data --strict
+
+      - name: Migration verification round trip
+        working-directory: backend
+        # Proves the verifier itself works: snapshot, migrate, compare. A
+        # migration that runs without error has proved nothing on its own.
+        run: |
+          python manage.py verify_migration --snapshot "$RUNNER_TEMP/state.json"
+          python manage.py migrate --noinput
+          python manage.py verify_migration --compare "$RUNNER_TEMP/state.json" --allow-growth
+
       - name: Tests
         working-directory: backend
         run: python -m pytest -q
