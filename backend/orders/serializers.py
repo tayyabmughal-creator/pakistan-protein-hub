@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from products.models import Product
+from products.models import Product, ProductVariant
 from promotions.models import Promotion
 from .models import Order, OrderItem, PaymentSession
 
@@ -63,8 +63,39 @@ class OrderSerializer(serializers.ModelSerializer):
         read_only_fields = ['user', 'total_amount']
 
 class GuestOrderItemInputSerializer(serializers.Serializer):
+    """One basket line.
+
+    ``variant_id`` is optional for backward compatibility: the current SPA and
+    the Expo admin post ``product_id`` alone and must keep working. Omitting it
+    means "the default variant", which is what the pipeline already did
+    implicitly — now it is a stated rule rather than an accident.
+
+    Supplying it is how a storefront that offers a size or flavour choice says
+    which one the customer picked. Without it, choosing the 5lb tub and being
+    charged for the 2lb one is unavoidable, because the request cannot express
+    the difference.
+    """
+
     product_id = serializers.PrimaryKeyRelatedField(queryset=Product.objects.filter(is_active=True), source='product')
+    variant_id = serializers.PrimaryKeyRelatedField(
+        queryset=ProductVariant.objects.filter(is_active=True),
+        source='variant',
+        required=False,
+        allow_null=True,
+    )
     quantity = serializers.IntegerField(min_value=1)
+
+    def validate(self, attrs):
+        variant = attrs.get('variant')
+        product = attrs.get('product')
+        # A variant belonging to a different product would let a crafted
+        # request buy a cheap variant under an expensive product's name, or
+        # bill an expensive variant while shipping against a cheap one.
+        if variant is not None and product is not None and variant.product_id != product.id:
+            raise serializers.ValidationError(
+                {'variant_id': 'That option does not belong to this product.'}
+            )
+        return attrs
 
 
 class CreateOrderSerializer(serializers.Serializer):

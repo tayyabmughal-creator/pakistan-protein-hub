@@ -308,6 +308,37 @@ class StockService:
 
     @staticmethod
     @transaction.atomic
+    def deduct_variant_stock(variant, quantity: int, *, reference="", order=None):
+        """Sell a specific variant.
+
+        The product-level `deduct_stock` above resolves the default variant,
+        which is correct only when a product has one. Checkout must draw down
+        the variant the customer actually chose and was charged for — taking it
+        from the default instead oversells one size while phantom stock
+        accumulates in another.
+        """
+        from inventory import services as inventory_services
+        from inventory.models import StockMovement
+
+        location = inventory_services.get_location()
+        balance = inventory_services._balance_for_update(variant, location)
+
+        if balance.available < quantity:
+            raise inventory_services.InsufficientStock(variant, quantity, balance.available)
+
+        balance.on_hand -= quantity
+        balance.save(update_fields=["on_hand", "updated_at"])
+        inventory_services._post_movement(
+            variant=variant, location=location, quantity=-quantity,
+            movement_type=StockMovement.SALE, balance_after=balance.on_hand,
+            reference=reference, order=order,
+        )
+        # Keep the denormalised Product.price/stock the SPA still reads in step.
+        sync_legacy_product_fields(variant.product)
+        return balance.available
+
+    @staticmethod
+    @transaction.atomic
     def restore_stock(product_id: int, quantity: int, *, reference="", order=None, actor=None):
         from inventory import services as inventory_services
 

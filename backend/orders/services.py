@@ -23,7 +23,7 @@ from django.utils import timezone
 from cart.models import Cart
 from common.dispatch import enqueue
 from inventory import services as inventory_services
-from products.models import Product
+from products.models import Product, ProductVariant
 from products.services import StockService
 from promotions.models import Promotion
 from users.models import Address
@@ -170,20 +170,75 @@ class CheckoutPreparationService:
             queryset = queryset.select_for_update().order_by("id")
         return {product.id: product for product in queryset}
 
+    @staticmethod
+    def _load_variants(variant_ids, *, lock=False):
+        queryset = ProductVariant.objects.filter(id__in=variant_ids)
+        if lock:
+            # Same deterministic ordering as products, for the same reason.
+            queryset = queryset.select_for_update(of=("self",)).order_by("id")
+        return {variant.id: variant for variant in queryset}
+
+    @classmethod
+    def _resolve_variant(cls, product, variant, variants_by_id):
+        """The variant this line actually sells.
+
+        No explicit choice means the default — which is what the pipeline
+        always did, and what the existing SPA and Expo admin still rely on.
+        An explicit choice is honoured, after checking it belongs to this
+        product and is still sellable.
+        """
+        if variant is None:
+            resolved = product.default_variant
+            if resolved is None:
+                raise ValidationError(
+                    f"{product.name} has no sellable option. Please contact support."
+                )
+            return resolved
+
+        resolved = variants_by_id.get(
+            variant.id if hasattr(variant, "id") else variant
+        )
+        if resolved is None or not resolved.is_active:
+            raise ValidationError(
+                f"The selected option for {product.name} is no longer available."
+            )
+        # Re-checked here and not only in the serializer: this is the last
+        # point before money is calculated, and the reservation and order
+        # paths both call in here without going through a serializer.
+        if resolved.product_id != product.id:
+            raise ValidationError("That option does not belong to this product.")
+        return resolved
+
     @classmethod
     def _price_lines(cls, requested, *, lock=False):
         """Price and validate each line against the live catalogue.
 
-        ``requested`` is a list of ``(product_id, quantity)``. Returns
-        ``(normalized_items, subtotal)``.
+        ``requested`` is a list of ``(product_id, variant_id, quantity)``;
+        ``variant_id`` may be None, meaning the product's default variant.
+        Returns ``(normalized_items, subtotal)``.
+
+        Price comes from the **variant**, not `product.final_price`, and
+        availability from the **inventory ledger** for that variant, not the
+        denormalised `product.stock`. Those two were the bug: a product with a
+        2lb and a 5lb option priced every line at the default variant's price
+        and checked stock against the product-wide total, so choosing the 5lb
+        tub charged the 2lb price and could oversell it against the 2lb tub's
+        stock.
         """
-        product_ids = [product_id for product_id, _ in requested]
+        requested = [cls._normalise_request(entry) for entry in requested]
+
+        product_ids = [product_id for product_id, _, _ in requested]
         products = cls._load_priced_products(product_ids, lock=lock)
+
+        explicit_variant_ids = [
+            variant_id for _, variant_id, _ in requested if variant_id is not None
+        ]
+        variants_by_id = cls._load_variants(explicit_variant_ids, lock=lock)
 
         normalized_items = []
         subtotal = Decimal("0.00")
 
-        for product_id, quantity in requested:
+        for product_id, variant_id, quantity in requested:
             product = products.get(product_id)
             if product is None:
                 raise ValidationError("A product in your cart is no longer available.")
@@ -191,17 +246,24 @@ class CheckoutPreparationService:
                 raise ValidationError(f"{product.name} is no longer available.")
             if quantity < 1:
                 raise ValidationError(f"Invalid quantity for {product.name}.")
-            if product.stock < quantity:
+
+            variant = cls._resolve_variant(product, variant_id, variants_by_id)
+
+            available = inventory_services.get_available(variant)
+            if available < quantity:
+                label = variant.descriptor
+                name = f"{product.name} ({label})" if label else product.name
                 raise ValidationError(
-                    f"Only {product.stock} left of {product.name}. Please update your cart."
+                    f"Only {available} left of {name}. Please update your cart."
                 )
 
-            price = _to_money(product.final_price)
+            price = _to_money(variant.current_price)
             line_total = _to_money(price * quantity)
             subtotal += line_total
             normalized_items.append(
                 {
                     "product_id": product.id,
+                    "variant_id": variant.id,
                     "product_name": product.name,
                     "quantity": quantity,
                     "price": str(price),
@@ -210,6 +272,19 @@ class CheckoutPreparationService:
             )
 
         return normalized_items, _to_money(subtotal)
+
+    @staticmethod
+    def _normalise_request(entry):
+        """Accept both the old 2-tuple and the new 3-tuple.
+
+        Callers inside this module have been updated, but keeping the 2-tuple
+        working means an out-of-tree caller does not break silently — it just
+        gets the default variant, exactly as it did before.
+        """
+        if len(entry) == 2:
+            product_id, quantity = entry
+            return product_id, None, quantity
+        return entry
 
     @staticmethod
     def _totals(subtotal, promotion):
@@ -230,7 +305,10 @@ class CheckoutPreparationService:
         address = cls._get_registered_address(user, address_id)
 
         shipping_address = f"{address.full_name}, {address.phone_number}, {address.street}, {address.area}, {address.city}"
-        requested = [(item.product_id, item.quantity) for item in cart_items]
+        # The server-side Cart is unique on (cart, product) and has no
+        # variant column, so a registered cart cannot express a choice. These
+        # lines resolve to the default variant, as they always have.
+        requested = [(item.product_id, None, item.quantity) for item in cart_items]
         normalized_items, subtotal = cls._price_lines(requested, lock=lock)
 
         promotion = PromotionService.get_valid_promotion(promo_code) if promo_code else None
@@ -264,7 +342,14 @@ class CheckoutPreparationService:
             raise ValidationError("Cart is empty")
 
         shipping_address = f"{guest_name}, {guest_phone_number}, {street}, {area}, {city}"
-        requested = [(item["product"].id, item["quantity"]) for item in items]
+        requested = [
+            (
+                item["product"].id,
+                item["variant"].id if item.get("variant") else None,
+                item["quantity"],
+            )
+            for item in items
+        ]
         normalized_items, subtotal = cls._price_lines(requested, lock=lock)
 
         promotion = PromotionService.get_valid_promotion(promo_code) if promo_code else None
@@ -385,11 +470,18 @@ class OrderService:
         promotion = PromotionService.get_valid_promotion(promo_code)
         if user:
             _, cart_items = CheckoutPreparationService._get_cart_items(user)
-            requested = [(item.product_id, item.quantity) for item in cart_items]
+            requested = [(item.product_id, None, item.quantity) for item in cart_items]
         else:
             if not items:
                 raise ValidationError("Cart is empty")
-            requested = [(item["product"].id, item["quantity"]) for item in items]
+            requested = [
+                (
+                    item["product"].id,
+                    item["variant"].id if item.get("variant") else None,
+                    item["quantity"],
+                )
+                for item in items
+            ]
 
         # Priced from the live catalogue, exactly as checkout will price it, so
         # the quote the customer sees matches what they are charged.
@@ -476,14 +568,31 @@ class OrderService:
                         .prefetch_related("variants")
                         .first()
                     )
-                    variant = product.default_variant if product else None
+                    # The snapshot records which variant was priced. Falling
+                    # back to the default here would deduct a different tub
+                    # from the one the customer was charged for.
+                    variant_id = item.get("variant_id")
+                    if variant_id and product:
+                        variant = next(
+                            (v for v in product.variants.all() if v.id == variant_id),
+                            None,
+                        )
+                    if variant is None and product:
+                        variant = product.default_variant
 
                     # Stock already held by a reservation is committed by the
                     # caller, not sold again here.
                     if reservation_reference is None:
-                        StockService.deduct_stock(
-                            product_id, item["quantity"], reference=f"order:{order.id}", order=order
-                        )
+                        if variant is not None:
+                            StockService.deduct_variant_stock(
+                                variant, item["quantity"],
+                                reference=f"order:{order.id}", order=order,
+                            )
+                        else:
+                            StockService.deduct_stock(
+                                product_id, item["quantity"],
+                                reference=f"order:{order.id}", order=order,
+                            )
 
                 unit_price = _to_money(item["price"])
                 quantity = item["quantity"]
@@ -1029,12 +1138,20 @@ class PaymentSessionService:
         # checkout cannot keep goods out of the catalogue indefinitely.
         reference = cls.reservation_reference(session)
         for item in checkout_data["items_snapshot"]:
-            product = (
-                Product.objects.filter(id=item.get("product_id"))
-                .prefetch_related("variants")
-                .first()
-            )
-            variant = product.default_variant if product else None
+            variant = None
+            variant_id = item.get("variant_id")
+            if variant_id:
+                # Hold the variant the customer is paying for. Reserving the
+                # default one instead holds the wrong tub and leaves the right
+                # one open to being oversold during the payment window.
+                variant = ProductVariant.objects.filter(id=variant_id).first()
+            if variant is None:
+                product = (
+                    Product.objects.filter(id=item.get("product_id"))
+                    .prefetch_related("variants")
+                    .first()
+                )
+                variant = product.default_variant if product else None
             if variant is None:
                 continue
             inventory_services.reserve(
