@@ -183,12 +183,36 @@ class ProductionConfigValidationTests(TestCase):
             ORDER_NOTIFICATION_EMAIL_ENABLED=False,
             ORDER_NOTIFICATION_SMS_ENABLED=False,
             CELERY_TASK_ALWAYS_EAGER=False,
+            ADMIN_URL="secure-admin/",
         )
         base.update(overrides)
         return SimpleNamespace(**base)
 
     def test_a_good_configuration_reports_nothing(self):
         self.assertEqual(env.validate_production_settings(self._settings()), [])
+
+    def test_default_admin_url_is_refused(self):
+        """The nginx edge routes /admin/* to the staff SPA.
+
+        Django admin is proxied at the ADMIN_URL prefix instead, so leaving the
+        default both hides Django admin behind a route that no longer reaches
+        it and parks it on the first path anyone scanning a Django site tries.
+        """
+        for value in ("admin/", "admin", "", None):
+            with self.subTest(admin_url=value):
+                problems = env.validate_production_settings(
+                    self._settings(ADMIN_URL=value)
+                )
+                self.assertTrue(
+                    any("ADMIN_URL" in problem for problem in problems),
+                    f"{value!r} should have been refused",
+                )
+
+    def test_a_custom_admin_url_is_accepted(self):
+        self.assertEqual(
+            env.validate_production_settings(self._settings(ADMIN_URL="ops-console/")),
+            [],
+        )
 
     def test_sqlite_in_production_is_refused(self):
         problems = env.validate_production_settings(

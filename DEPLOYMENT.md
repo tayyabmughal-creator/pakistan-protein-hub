@@ -14,18 +14,54 @@ backup/restore drill.
 ## 1. The shape of it
 
 ```
-customer → nginx (frontend image) ─┬─ / , /assets/   static SPA build
-                                   ├─ /api/, /admin/, /static/  → backend:8000
-                                   └─ /media/        uploaded files (volume)
+customer → nginx (frontend image)
+             │
+             ├─ /, /products, /categories, /deals,     → storefront:3000
+             │  /checkout, /track, /order-confirmation/,   (Next.js, SSR)
+             │  /sitemap.xml, /robots.txt, /_next/
+             │
+             ├─ /login, /register, /orders, /profile,  → static SPA build
+             │  /admin/*, /assets/                         (served from disk)
+             │
+             ├─ /api/, /static/, ADMIN_URL,            → backend:8000
+             │  /healthz, /readyz
+             │
+             └─ /media/                                 uploaded files (volume)
 
 backend (gunicorn)  ── PostgreSQL 16
 worker  (celery)   ─┤
 beat    (celery)   ─┴─ Redis  (cache + broker)
+storefront (node)  ──→ backend:8000
 ```
 
 One backend image runs four roles, selected by the entrypoint argument: `web`,
 `worker`, `beat`, `migrate`. Same artefact, so a worker can never be running
 different code from the web tier.
+
+### Why two frontends
+
+The public catalogue needs server rendering and SEO; the account area and the
+staff admin need neither and already work. Rewriting them to gain nothing would
+be churn, so they stay in the Vite SPA and nginx routes between the two. The
+split is a routing table, not a rewrite.
+
+### The routing contract
+
+Two things in `frontend/nginx/default.conf` are load-bearing and easy to break:
+
+**`location /` is last on purpose.** It is the SPA's `try_files` fallback, so it
+only catches what nothing else claimed. Adding a storefront route means adding a
+`location` block above it — a new Next.js page that nginx does not know about
+will silently render the SPA's 404 instead.
+
+**Django admin is proxied at `ADMIN_URL`, not `/admin/`.** `/admin/*` belongs to
+the SPA's staff screens. This was wrong until it was found: nginx proxied
+`/admin/` to Django, which has no route for `/admin/orders` or
+`/admin/inventory`, so every Phase 4 admin screen answered 404 in production
+while working perfectly in development. `validate_production_settings` now
+refuses to boot with the default `ADMIN_URL`, so the two cannot drift apart
+silently — but if you change `ADMIN_URL` in `.env`, change the `location` block
+to match.
 
 ---
 
@@ -241,6 +277,76 @@ Moving to containers is a planned operation, not a side effect of a push:
 
 Until then the systemd path stays authoritative, and it has already been
 hardened: gated on CI, and taking a pre-deploy backup.
+
+### 7.1 Before the storefront can serve anyone
+
+The storefront container has never run outside CI and a developer machine.
+These must be true before it takes customer traffic:
+
+- [ ] **`ADMIN_URL` is set** in `backend/.env` (e.g. `secure-admin/`) and matches
+      the `location` block in `frontend/nginx/default.conf`. The backend now
+      refuses to boot in production without it, so this fails loudly rather
+      than quietly — but it fails the *deploy*, which is worth knowing first.
+- [ ] **`NEXT_PUBLIC_SITE_URL` is the real public origin.** It is baked into the
+      client bundle at build time, so it cannot be changed by restarting the
+      container. Wrong value means every canonical tag, Open Graph URL and
+      sitemap entry points at the wrong host — which is worse than having none,
+      because Google believes them.
+- [ ] **`NEXT_PUBLIC_MEDIA_HOST` is set** to the host serving `/media`. It is an
+      allow-list for `next/image`; unset, every product image fails to load in
+      production while working locally.
+- [ ] **Product content exists.** The product page renders ingredients, usage
+      directions, allergens and nutrition only when they are filled in. Shipping
+      a supplement store with no allergen information is a safety problem, not a
+      cosmetic one.
+- [ ] **Credentials rotated** per `SECURITY_REMEDIATION.md` §3.
+
+### 7.2 Storefront build arguments
+
+The storefront prerenders against a live API, so the **build** needs one — not
+just the runtime. A build against an unreachable API fails rather than emitting
+an empty catalogue, which is deliberate: an empty catalogue page looks exactly
+like a real one, caches, and gets indexed.
+
+```bash
+docker build -t paknutrition-storefront:"$IMAGE_TAG" \
+  --build-arg API_BASE_URL=http://backend:8000 \
+  --build-arg NEXT_PUBLIC_SITE_URL=https://paknutrition.pk \
+  --build-arg NEXT_PUBLIC_MEDIA_HOST=paknutrition.pk \
+  storefront
+```
+
+`API_BASE_URL` is server-side only and never reaches a browser. The two
+`NEXT_PUBLIC_*` values are inlined into the client bundle — changing either one
+requires a rebuild, not a restart.
+
+### 7.3 Verifying the storefront after cutover
+
+```bash
+# Real pages, not just a listening port.
+for p in / /products /categories /deals /checkout /track /sitemap.xml; do
+  printf '%-16s %s\n' "$p" "$(curl -s -o /dev/null -w '%{http_code}' "https://paknutrition.pk$p")"
+done
+
+# A missing product must answer 404, not 200 with not-found content. A soft
+# 404 gets indexed as a real page.
+curl -s -o /dev/null -w '%{http_code}\n' https://paknutrition.pk/products/does-not-exist   # 404
+
+# The staff screens must reach the SPA, not Django.
+curl -s -o /dev/null -w '%{http_code}\n' https://paknutrition.pk/admin/inventory           # 200
+
+# Canonical tags must name the real host.
+curl -s https://paknutrition.pk/products/<a-real-slug> | grep -o '<link rel="canonical"[^>]*>'
+```
+
+### 7.4 Rolling the storefront back
+
+The storefront is a separate container with no database of its own, so rolling
+it back is independent of the backend: set `IMAGE_TAG` to the previous value
+and restart `storefront` alone. If it is failing badly, comment out the
+storefront `location` blocks in the nginx config and reload — every route falls
+through to the SPA, which still has its own homepage and product pages. That is
+the reason those pages have not been deleted.
 
 ---
 

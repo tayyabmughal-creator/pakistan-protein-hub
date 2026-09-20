@@ -173,6 +173,151 @@ jobs:
           VITE_API_BASE_URL: http://127.0.0.1:8000/api
         run: npm run build
 
+  storefront:
+    name: Storefront
+    runs-on: ubuntu-latest
+
+    # The storefront prerenders pages against a live API at build time, so this
+    # job stands one up. That is not incidental: it means a change to a
+    # serializer that the storefront reads fails here, at build time, instead of
+    # rendering a blank homepage in production.
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: paknutrition_storefront
+          POSTGRES_USER: paknutrition
+          POSTGRES_PASSWORD: ci-postgres-password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      SECRET_KEY: ci-secret-key-not-used-anywhere-else-000000
+      DEBUG: "1"
+      ALLOWED_HOSTS: localhost,127.0.0.1
+      POSTGRES_DB: paknutrition_storefront
+      POSTGRES_USER: paknutrition
+      POSTGRES_PASSWORD: ci-postgres-password
+      POSTGRES_HOST: localhost
+      POSTGRES_PORT: "5432"
+      CELERY_TASK_ALWAYS_EAGER: "1"
+      EMAIL_BACKEND: django.core.mail.backends.console.EmailBackend
+      ORDER_NOTIFICATION_SMS_ENABLED: "0"
+      ADMIN_PUSH_NOTIFICATIONS_ENABLED: "0"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: storefront/package-lock.json
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+
+      - name: Install backend dependencies
+        working-directory: backend
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Prepare a catalogue to render
+        working-directory: backend
+        run: |
+          python manage.py migrate --noinput
+          python manage.py seed_drill_data
+
+      - name: Start the API
+        working-directory: backend
+        run: |
+          gunicorn config.wsgi:application --bind 127.0.0.1:8000 --workers 2 \
+            --access-logfile - --error-logfile - > "$RUNNER_TEMP/api.log" 2>&1 &
+          for attempt in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:8000/readyz >/dev/null 2>&1; then
+              echo "Ready after ${attempt}s"; exit 0
+            fi
+            sleep 1
+          done
+          echo "::error::API never became ready"
+          cat "$RUNNER_TEMP/api.log"
+          exit 1
+
+      - name: Install storefront dependencies
+        working-directory: storefront
+        run: npm ci
+
+      - name: Lint
+        working-directory: storefront
+        run: npx eslint src --max-warnings 0
+
+      - name: Typecheck
+        working-directory: storefront
+        run: npx tsc --noEmit
+
+      - name: Production build
+        working-directory: storefront
+        env:
+          API_BASE_URL: http://127.0.0.1:8000
+          NEXT_PUBLIC_SITE_URL: https://paknutrition.pk
+        run: npm run build
+
+      - name: Serve the built storefront and check it renders
+        working-directory: storefront
+        env:
+          API_BASE_URL: http://127.0.0.1:8000
+        run: |
+          npx next start -p 3000 > "$RUNNER_TEMP/storefront.log" 2>&1 &
+          for attempt in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:3000/robots.txt >/dev/null 2>&1; then
+              break
+            fi
+            sleep 1
+          done
+
+          fail=0
+          check() {
+            actual=$(curl -s -o /dev/null -w '%{http_code}' "http://127.0.0.1:3000$1")
+            if [ "$actual" != "$2" ]; then
+              echo "::error::$1 returned $actual, expected $2"
+              fail=1
+            else
+              echo "ok  $1 -> $actual"
+            fi
+          }
+
+          check / 200
+          check /products 200
+          check /categories 200
+          check /deals 200
+          check /checkout 200
+          check /track 200
+          check /sitemap.xml 200
+          check /robots.txt 200
+
+          # A missing product must answer 404, not 200 with not-found content.
+          # A loading.tsx at the app root silently turned every one of these
+          # into a soft 404 that Google would index as a real page; this is the
+          # check that catches it coming back.
+          check /products/definitely-not-a-real-product 404
+          check /order-confirmation/not-a-number 404
+
+          exit $fail
+
+      - name: Storefront log on failure
+        if: failure()
+        run: cat "$RUNNER_TEMP/storefront.log" "$RUNNER_TEMP/api.log" || true
+
   smoke:
     name: End-to-end smoke
     runs-on: ubuntu-latest
@@ -370,6 +515,13 @@ jobs:
         # Gate on what actually reaches a customer's browser. High or critical
         # in a runtime dependency fails the build.
         run: npm audit --omit=dev --audit-level=high
+
+      - name: npm dependency vulnerabilities (storefront)
+        working-directory: storefront
+        # The storefront runs as a server process, so a vulnerable dependency
+        # is reachable from the internet rather than only in a customer's tab.
+        # Blocking on the full tree, not just runtime deps.
+        run: npm audit --audit-level=high
 
       - name: npm dependency vulnerabilities (build toolchain, advisory only)
         working-directory: frontend

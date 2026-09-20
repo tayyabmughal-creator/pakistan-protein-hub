@@ -37,6 +37,14 @@ jobs:
             test -f backend/.env || (echo "Missing backend/.env" && exit 1)
             test -f frontend/.env || (echo "Missing frontend/.env" && exit 1)
 
+            if [ -z "${{ secrets.STOREFRONT_SITE_URL }}" ]; then
+              echo "Missing STOREFRONT_SITE_URL secret."
+              echo "It is baked into the storefront bundle at build time and"
+              echo "sets every canonical URL. Set it to the public origin,"
+              echo "e.g. https://paknutrition.pk"
+              exit 1
+            fi
+
             # --- Pre-deploy backup -------------------------------------------
             # `git reset --hard` below overwrites the working tree. Anything
             # tracked is replaced with the committed copy, and anything removed
@@ -112,12 +120,83 @@ jobs:
             fi
             npm run build
 
-            echo "Restarting application services"
+            cd ..
+
+            # The backend restarts BEFORE the storefront builds, on purpose.
+            # The storefront prerenders pages by calling the API, so it must
+            # call the *new* one — on the first deploy that adds a storefront
+            # endpoint, building against the still-running old process would
+            # fail with 404s after the migrations had already been applied.
+            echo "Restarting backend"
             sudo systemctl restart ${{ secrets.GUNICORN_SERVICE }}
+
+            echo "Waiting for the API to become ready"
+            for attempt in $(seq 1 30); do
+              if curl -fsS http://127.0.0.1:8000/readyz >/dev/null 2>&1; then
+                echo "API ready after ${attempt}s"
+                break
+              fi
+              if [ "$attempt" = "30" ]; then
+                echo "ERROR: API never became ready; not building the storefront"
+                sudo journalctl -u ${{ secrets.GUNICORN_SERVICE }} -n 50 --no-pager
+                exit 1
+              fi
+              sleep 1
+            done
+
+            echo "Building storefront"
+            cd storefront
+            if [ -f package-lock.json ]; then
+              npm ci
+            else
+              npm install
+            fi
+            # Baked into the client bundle at build time, so it cannot be fixed
+            # by restarting the service. A wrong value puts the wrong host in
+            # every canonical tag and sitemap entry.
+            export NEXT_PUBLIC_SITE_URL="${{ secrets.STOREFRONT_SITE_URL }}"
+            export NEXT_PUBLIC_MEDIA_HOST="${{ secrets.STOREFRONT_MEDIA_HOST }}"
+            # A build against an unreachable API fails here rather than
+            # shipping an empty catalogue, which looks identical to a real one
+            # and would be cached and indexed as such.
+            export API_BASE_URL="http://127.0.0.1:8000"
+            npm run build
+
+            cd ..
+
+            # Skipped until the unit is installed by hand (see
+            # deploy/paknutrition-storefront.service), so adding the storefront
+            # to the repository does not break deploys on a box that has not
+            # been set up for it yet.
+            if systemctl list-unit-files | grep -q '^paknutrition-storefront.service'; then
+              echo "Restarting storefront"
+              sudo systemctl restart paknutrition-storefront
+            else
+              echo "NOTE: paknutrition-storefront.service is not installed — skipping."
+              echo "      The storefront was built but is not being served."
+            fi
+
             sudo systemctl restart ${{ secrets.NGINX_SERVICE }}
 
             echo "Verifying service status"
             sudo systemctl is-active ${{ secrets.GUNICORN_SERVICE }}
             sudo systemctl is-active ${{ secrets.NGINX_SERVICE }}
+            if systemctl list-unit-files | grep -q '^paknutrition-storefront.service'; then
+              sudo systemctl is-active paknutrition-storefront
+
+              # Prove it renders, not just that systemd thinks it is running.
+              for attempt in $(seq 1 20); do
+                if curl -fsS http://127.0.0.1:3000/robots.txt >/dev/null 2>&1; then
+                  echo "Storefront responding"
+                  break
+                fi
+                if [ "$attempt" = "20" ]; then
+                  echo "ERROR: storefront never responded"
+                  sudo journalctl -u paknutrition-storefront -n 50 --no-pager
+                  exit 1
+                fi
+                sleep 1
+              done
+            fi
 
             echo "Deployment completed successfully"

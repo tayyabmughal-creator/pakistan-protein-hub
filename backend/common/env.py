@@ -83,6 +83,20 @@ def validate_production_settings(settings_module):
             "for new projects. Replace it."
         )
 
+    # The edge proxies Django admin at the ADMIN_URL prefix and routes
+    # /admin/* to the SPA's staff screens instead. Leaving ADMIN_URL at the
+    # default means Django admin is unreachable through nginx *and* sits at the
+    # first path anyone scanning a Django site tries.
+    admin_url = (getattr(s, "ADMIN_URL", "") or "").strip("/")
+    if admin_url in ("", "admin"):
+        problems.append(
+            "ADMIN_URL is still 'admin/'. The nginx edge routes /admin/* to the "
+            "staff SPA and proxies Django admin at ADMIN_URL, so leaving the "
+            "default makes Django admin unreachable. Set ADMIN_URL in "
+            "backend/.env (see .env.example) and keep it in step with "
+            "frontend/nginx/default.conf."
+        )
+
     if not getattr(s, "ALLOWED_HOSTS", None):
         problems.append("ALLOWED_HOSTS is empty. Set it to the hostnames this site serves.")
     elif "*" in s.ALLOWED_HOSTS:

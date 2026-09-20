@@ -9,6 +9,17 @@ import type { NextConfig } from "next";
 const mediaHost = process.env.NEXT_PUBLIC_MEDIA_HOST;
 
 const nextConfig: NextConfig = {
+  /*
+   * Emits a self-contained server bundle with only the node_modules actually
+   * imported. The production image is then ~180 MB instead of ~1.2 GB, which
+   * matters on a single small VPS where image pulls compete with the database
+   * for disk and bandwidth.
+   */
+  output: "standalone",
+
+  // The Server header is a free hint to anyone scanning for known Next.js CVEs.
+  poweredByHeader: false,
+
   images: {
     remotePatterns: [
       { protocol: "http", hostname: "127.0.0.1", port: "8000", pathname: "/media/**" },

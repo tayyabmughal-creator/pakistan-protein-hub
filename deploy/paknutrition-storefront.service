@@ -1,0 +1,67 @@
+# Pak Nutrition storefront (Next.js).
+#
+# Install once, by hand, on the VPS:
+#
+#   sudo cp deploy/paknutrition-storefront.service /etc/systemd/system/
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now paknutrition-storefront
+#
+# Until this unit exists the deploy workflow skips restarting it, so adding
+# the storefront to the repository does not break deploys for a box that has
+# not been set up yet.
+
+[Unit]
+Description=Pak Nutrition storefront (Next.js)
+After=network.target
+# The storefront renders by calling the API. Starting before gunicorn is up
+# just means the first few requests fail; Wants (not Requires) so a backend
+# restart does not take the storefront down with it.
+Wants=gunicorn.service
+
+[Service]
+Type=simple
+
+# Match to the account that owns the checkout; the deploy workflow builds as
+# this user and systemd must run as the same one or .next will be unreadable.
+User=REPLACE_WITH_DEPLOY_USER
+Group=REPLACE_WITH_DEPLOY_USER
+WorkingDirectory=/REPLACE/WITH/PROJECT_PATH/storefront
+
+Environment=NODE_ENV=production
+Environment=NEXT_TELEMETRY_DISABLED=1
+Environment=PORT=3000
+Environment=HOSTNAME=127.0.0.1
+# Server-side only, never reaches a browser. Bound to loopback because nginx
+# is the only thing that should be able to reach either process directly.
+Environment=API_BASE_URL=http://127.0.0.1:8000
+
+# `npm run start` would add a node process whose only job is to spawn another
+# one, so a restart has to kill two. Call next directly.
+ExecStart=/usr/bin/env node node_modules/.bin/next start -p 3000 -H 127.0.0.1
+
+Restart=always
+RestartSec=5
+
+# A Next.js process that has wedged still holds its port, so systemd cannot
+# tell it apart from a healthy one. The watchdog below is the cheap version:
+# restart on exit, and rely on nginx failing over to the SPA if it is hard down.
+KillSignal=SIGTERM
+TimeoutStopSec=20
+
+# Hardening. The storefront reads its own build output and talks to the API;
+# it has no reason to write anywhere or to see the rest of the filesystem.
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=/REPLACE/WITH/PROJECT_PATH/storefront/.next
+ProtectKernelTunables=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=paknutrition-storefront
+
+[Install]
+WantedBy=multi-user.target

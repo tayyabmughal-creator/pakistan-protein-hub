@@ -129,11 +129,38 @@ services:
     deploy:
       replicas: 1
 
+  # The customer-facing store. Server-rendered, so it is a running Node
+  # process rather than static files — it fetches from the backend on every
+  # request that is not still inside its revalidation window.
+  storefront:
+    image: ${STOREFRONT_IMAGE:-paknutrition-storefront}:${IMAGE_TAG:-latest}
+    restart: unless-stopped
+    environment:
+      # Server-side only. Traffic stays on the compose network, so the API
+      # does not need to be publicly reachable for the storefront to work.
+      API_BASE_URL: http://backend:8000
+    depends_on:
+      backend:
+        condition: service_healthy
+    expose:
+      - "3000"
+    healthcheck:
+      # Renders a real route. A Next process can hold the socket open while
+      # failing to render, and a port check would keep a broken container in
+      # service.
+      test: ["CMD-SHELL", "node -e \"fetch('http://127.0.0.1:3000/robots.txt').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+
   frontend:
     image: ${FRONTEND_IMAGE:-paknutrition-frontend}:${IMAGE_TAG:-latest}
     restart: unless-stopped
     depends_on:
       backend:
+        condition: service_healthy
+      storefront:
         condition: service_healthy
     ports:
       - "80:80"
