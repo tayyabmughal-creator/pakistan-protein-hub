@@ -326,3 +326,104 @@ class SingleVariantRegressionTestCase(TestCase):
         self.assertEqual(item.variant_id, self.variant.id)
         self.assertEqual(item.price, Decimal("3999.00"))
         self.assertEqual(order.subtotal_amount, Decimal("7998.00"))
+
+
+class PreviewMatchesCheckoutTestCase(VariantCheckoutTestCase):
+    """The quote and the charge must agree.
+
+    A preview that ignores the variant quotes the default variant's price and
+    then checkout bills the chosen one. Showing a customer one total and
+    charging another is the fastest way to lose their trust, and in Pakistan it
+    is the kind of thing that gets screenshotted.
+    """
+
+    def preview(self, items, promo_code=""):
+        return self.client.post(
+            reverse("order-promo-preview"),
+            {"promo_code": promo_code, "items": items},
+            format="json",
+        )
+
+    def test_preview_prices_the_chosen_variant_not_the_default(self):
+        from promotions.models import Promotion
+        from django.utils import timezone
+        from datetime import timedelta
+
+        Promotion.objects.create(
+            code="SAVE10",
+            discount_percentage=10,
+            usage_limit=100,
+            used_count=0,
+            valid_from=timezone.now() - timedelta(days=1),
+            valid_to=timezone.now() + timedelta(days=30),
+            active=True,
+        )
+
+        items = [
+            {"product_id": self.product.id, "variant_id": self.large.id, "quantity": 1}
+        ]
+
+        quoted = self.preview(items, promo_code="SAVE10")
+        self.assertEqual(quoted.status_code, 200, quoted.data)
+
+        placed = self.post_order(items, promo_code="SAVE10")
+        self.assertEqual(placed.status_code, 201, placed.data)
+        order = Order.objects.get(pk=placed.data["id"])
+
+        self.assertEqual(
+            Decimal(str(quoted.data["subtotal_amount"])), order.subtotal_amount
+        )
+        self.assertEqual(
+            Decimal(str(quoted.data["total_amount"])), order.total_amount
+        )
+        self.assertEqual(order.subtotal_amount, Decimal("21000.00"))
+
+    def quote(self, items, promo_code=""):
+        return self.client.post(
+            reverse("order-quote"),
+            {"promo_code": promo_code, "items": items},
+            format="json",
+        )
+
+    def test_quote_needs_no_promo_code(self):
+        """The checkout page must show shipping and total before a customer
+        commits, whether or not they have a coupon.
+
+        The promo-preview endpoint requires a non-blank code, so it cannot
+        answer "what will this basket cost me" — which is the question every
+        checkout page has to answer.
+        """
+        items = [{"product_id": self.product.id, "quantity": 1}]
+        quoted = self.quote(items)
+        self.assertEqual(quoted.status_code, 200, quoted.data)
+        self.assertEqual(
+            Decimal(str(quoted.data["subtotal_amount"])), Decimal("9000.00")
+        )
+
+    def test_quote_matches_what_checkout_charges(self):
+        items = [
+            {"product_id": self.product.id, "variant_id": self.large.id, "quantity": 1},
+            {"product_id": self.product.id, "variant_id": self.small.id, "quantity": 2},
+        ]
+        quoted = self.quote(items)
+        self.assertEqual(quoted.status_code, 200, quoted.data)
+
+        placed = self.post_order(items)
+        self.assertEqual(placed.status_code, 201, placed.data)
+        order = Order.objects.get(pk=placed.data["id"])
+
+        for field in ("subtotal_amount", "discount_amount", "shipping_fee", "total_amount"):
+            self.assertEqual(
+                Decimal(str(quoted.data[field])),
+                getattr(order, field),
+                f"{field} quoted differs from what was charged",
+            )
+
+    def test_quote_reports_a_line_that_cannot_be_fulfilled(self):
+        """Better to say so on the checkout page than after they press pay."""
+        self.stock(self.large, 1)
+        response = self.quote(
+            [{"product_id": self.product.id, "variant_id": self.large.id, "quantity": 4}]
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("1", str(response.data))

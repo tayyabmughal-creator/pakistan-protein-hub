@@ -14,6 +14,7 @@ from .notifications import send_admin_new_order_push
 from .services import PaymentSessionService
 from django.utils import timezone
 from datetime import timedelta
+from products.services import StockService
 
 
 User = get_user_model()
@@ -140,29 +141,43 @@ class OrderApiTests(APITestCase):
         self.assertEqual(self.promotion.used_count, 1)
 
     def test_cancel_pending_order_restores_stock(self):
+        # Built to look like an order that actually went through checkout:
+        # a variant on the line and inventory_committed set. Cancellation
+        # restores against the variant, and only for orders that really took
+        # stock — the migration marked every historical order committed for
+        # exactly this reason, so a synthetic order with the flag unset is not
+        # a state that occurs in the live database.
+        variant = self.product.default_variant
         order = Order.objects.create(
             user=self.user,
             total_amount="12000.00",
             shipping_address="Order User, 123456789, Street 1, Clifton, Karachi",
             payment_method="COD",
             status="PENDING",
+            inventory_committed=True,
         )
         order.items.create(
             product=self.product,
+            variant=variant,
             product_name=self.product.name,
             quantity=1,
             price="12000.00",
         )
-        self.product.stock = 9
-        self.product.save(update_fields=["stock"])
+        StockService.deduct_variant_stock(variant, 1, reference=f"order:{order.id}", order=order)
+        self.product.refresh_from_db()
+        self.assertEqual(self.product.stock, 9, "precondition: the sale took a unit")
 
         response = self.client.post(f"/api/orders/{order.id}/cancel/")
 
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
         order.refresh_from_db()
         self.product.refresh_from_db()
         self.assertEqual(order.status, "CANCELLED")
         self.assertEqual(self.product.stock, 10)
+        self.assertFalse(
+            order.inventory_committed,
+            "a second cancellation must not restock the same unit again",
+        )
 
     def test_paid_order_cannot_be_cancelled_by_customer(self):
         order = Order.objects.create(

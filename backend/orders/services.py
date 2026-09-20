@@ -487,12 +487,16 @@ class OrderService:
         # the quote the customer sees matches what they are charged.
         _, subtotal = CheckoutPreparationService._price_lines(requested)
 
+        # No coupon is the common case, not an error. This used to assume a
+        # promotion was always present and raised AttributeError on
+        # `promotion.code`, which surfaced as a 500 — so there was no way to
+        # ask "what does this basket cost" without supplying a code.
         discount = PromotionService.calculate_discount(subtotal, promotion)
         shipping_fee = _shipping_fee_for_subtotal(subtotal)
         total = _to_money(subtotal - discount + shipping_fee)
         return {
-            "code": promotion.code,
-            "discount_percentage": promotion.discount_percentage,
+            "code": promotion.code if promotion else "",
+            "discount_percentage": promotion.discount_percentage if promotion else 0,
             "subtotal_amount": subtotal,
             "discount_amount": discount,
             "shipping_fee": shipping_fee,
@@ -641,8 +645,11 @@ class OrderService:
                     for item in order.items.select_related("variant"):
                         if item.variant_id is None:
                             continue
-                        StockService.deduct_stock(
-                            item.product_id,
+                        # The line already knows its variant — deducting via
+                        # the product would resolve the default one instead and
+                        # take the wrong tub off the shelf.
+                        StockService.deduct_variant_stock(
+                            item.variant,
                             item.quantity,
                             reference=f"order:{order.id}",
                             order=order,

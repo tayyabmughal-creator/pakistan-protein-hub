@@ -8,6 +8,7 @@ from django.urls import path
 from payments.views import SafepayCancelView, SafepayReturnView
 
 from .views import (
+    CheckoutQuoteView,
     GuestOrderLookupView,
     OrderCancelView,
     OrderDetailView,
@@ -41,6 +42,7 @@ urlpatterns = [
     path('payment-methods/', PaymentMethodListView.as_view(), name='payment-method-list'),
     path('orders/', OrderListCreateView.as_view(), name='order-list-create'),
     path('orders/promo-preview/', PromotionPreviewView.as_view(), name='order-promo-preview'),
+    path('orders/quote/', CheckoutQuoteView.as_view(), name='order-quote'),
     path('orders/payment-sessions/', PaymentSessionCreateView.as_view(), name='order-payment-session-create'),
     path('orders/payment-sessions/<uuid:public_id>/', PaymentSessionDetailView.as_view(), name='order-payment-session-detail'),
 

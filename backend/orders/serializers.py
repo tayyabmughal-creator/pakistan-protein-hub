@@ -147,9 +147,29 @@ class GuestOrderLookupSerializer(serializers.Serializer):
         return attrs
 
 
-class PromotionPreviewItemSerializer(serializers.Serializer):
-    product_id = serializers.PrimaryKeyRelatedField(queryset=Product.objects.filter(is_active=True), source='product')
-    quantity = serializers.IntegerField(min_value=1)
+class PromotionPreviewItemSerializer(GuestOrderItemInputSerializer):
+    """The same line shape as a real order.
+
+    Deliberately inherits rather than redeclaring: a preview that could not
+    carry the variant would quote the default variant's price and then charge
+    the chosen one at checkout. The customer seeing one total and being billed
+    another is the single thing a quote must never do, and the only reliable
+    way to prevent it is for the quote and the order to parse the basket
+    identically.
+    """
+
+
+class CheckoutQuoteSerializer(serializers.Serializer):
+    """What will this basket cost me?
+
+    The promo-preview serializer below demands a non-blank code, so it cannot
+    answer that question for the common case of a customer with no coupon. A
+    checkout page has to show shipping and the total before the customer
+    commits, so this accepts a basket with an optional code.
+    """
+
+    promo_code = serializers.CharField(required=False, allow_blank=True, default="")
+    items = PromotionPreviewItemSerializer(many=True, required=False)
 
 
 class PromotionPreviewSerializer(serializers.Serializer):

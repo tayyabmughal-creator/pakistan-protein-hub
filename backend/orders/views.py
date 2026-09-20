@@ -11,6 +11,7 @@ from payments.services import initiate_payment
 from .models import Order, PaymentSession
 from products.services import StockService
 from .serializers import (
+    CheckoutQuoteSerializer,
     CreateOrderSerializer,
     GuestOrderLookupSerializer,
     OrderSerializer,
@@ -20,6 +21,7 @@ from .serializers import (
 )
 from .services import (
     OrderService,
+    OrderTransitionService,
     PaymentMethodService,
     PaymentSessionService,
 )
@@ -176,11 +178,19 @@ class OrderCancelView(views.APIView):
             return Response({"error": "Cannot cancel order in current status"}, status=status.HTTP_400_BAD_REQUEST)
 
         with transaction.atomic():
-            for item in order.items.exclude(product_id=None):
-                StockService.restore_stock(item.product.id, item.quantity)
+            # Route through the same service the admin uses. This used to call
+            # the product-level StockService.restore_stock, which resolves the
+            # default variant — so cancelling an order for the 5lb tub put a
+            # 2lb tub back on the shelf, and the ledger stopped agreeing with
+            # what was actually in the building. _cancel restores against the
+            # variant recorded on each line, and refuses to double-restore.
+            OrderTransitionService._cancel(
+                order, actor=request.user, reason="Cancelled by customer"
+            )
 
             order.status = "CANCELLED"
-            order.save(update_fields=["status", "updated_at"])
+            order.fulfilment_status = Order.FULFILMENT_CANCELLED
+            order.save(update_fields=["status", "fulfilment_status", "updated_at"])
 
         return Response({"status": "Order cancelled successfully"})
 
@@ -205,6 +215,44 @@ class GuestOrderLookupView(views.APIView):
             return Response({"error": "Order details did not match"}, status=status.HTTP_404_NOT_FOUND)
 
         return Response(OrderSerializer(order).data)
+
+
+class CheckoutQuoteView(views.APIView):
+    """POST /api/orders/quote/ — server-computed totals for a basket.
+
+    The storefront must never compute what a customer owes. It sends the
+    basket; this returns the same numbers the order will be created with,
+    priced from the live catalogue through the identical code path. If a line
+    cannot be fulfilled it fails here, on the checkout page, rather than after
+    the customer has committed.
+
+    Read-only: nothing is reserved, charged or recorded.
+    """
+
+    permission_classes = [permissions.AllowAny]
+
+    def post(self, request):
+        serializer = CheckoutQuoteSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+
+        try:
+            if request.user.is_authenticated and not data.get("items"):
+                quote = OrderService.preview_discount(
+                    user=request.user, promo_code=data.get("promo_code", "")
+                )
+            else:
+                quote = OrderService.preview_discount(
+                    items=data.get("items"), promo_code=data.get("promo_code", "")
+                )
+        except ValidationError as exc:
+            # A basket problem the customer can act on: out of stock, a dead
+            # promo code, an option that was withdrawn.
+            return Response(
+                {"error": "; ".join(exc.messages)},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        return Response(quote)
 
 
 class PromotionPreviewView(views.APIView):
