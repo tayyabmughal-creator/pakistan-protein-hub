@@ -15,6 +15,51 @@ class User(AbstractUser):
     def __str__(self):
         return self.email
 
+    # -- authorisation --------------------------------------------------
+    # Roles are Django Groups; the capabilities each role grants live in
+    # users/capabilities.py. Code checks capabilities, never role names, so
+    # changing who may refund is one line in one table rather than a change
+    # to every view that asks.
+
+    @property
+    def role_names(self):
+        return list(self.groups.values_list("name", flat=True))
+
+    def get_capabilities(self):
+        """Everything this user is allowed to do.
+
+        Cached per instance: a single request can check several capabilities and
+        there is no reason to re-read the group table for each one.
+        """
+        from .capabilities import ALL_CAPABILITIES, capabilities_for_roles
+
+        if self.is_superuser:
+            return set(ALL_CAPABILITIES)
+
+        cached = getattr(self, "_capability_cache", None)
+        if cached is None:
+            cached = capabilities_for_roles(self.role_names)
+            self._capability_cache = cached
+        return cached
+
+    def has_capability(self, capability):
+        """Deny by default.
+
+        An inactive or non-staff account has no capabilities at all, regardless
+        of the groups it is in — so revoking access is one flag, not an audit of
+        every group membership.
+        """
+        if not self.is_active:
+            return False
+        if self.is_superuser:
+            return True
+        if not self.is_staff:
+            return False
+        return capability in self.get_capabilities()
+
+    def has_any_capability(self, *capabilities):
+        return any(self.has_capability(capability) for capability in capabilities)
+
 class Address(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='addresses')
     full_name = models.CharField(max_length=255)

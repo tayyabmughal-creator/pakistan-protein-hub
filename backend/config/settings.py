@@ -87,6 +87,7 @@ INSTALLED_APPS = [
     'reviews',
     'promotions',
     'storefront',
+    'operations',
     'drf_spectacular',
 ]
 
