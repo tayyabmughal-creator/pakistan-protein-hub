@@ -47,6 +47,22 @@ search while the admin shows it as live.
 page rendered from a failed fetch looks identical to a real empty catalogue,
 gets cached, and gets indexed.
 
+## No root `loading.tsx`
+
+There is deliberately no `src/app/loading.tsx`. One was added and removed: a
+loading file at the app root wraps every route in a Suspense boundary, so the
+response starts streaming before the page component runs, and `notFound()` can
+then only render the not-found UI — the status stays **200**. Every missing
+product became a soft 404 that Google would index as a real page.
+
+If you want a skeleton, scope it to a segment that has no `notFound()` path, or
+use an explicit `<Suspense>` inside the page. Verify with:
+
+```bash
+curl -s -o /dev/null -w '%{http_code}\n' localhost:3000/products/does-not-exist
+# must print 404
+```
+
 ## URLs
 
 `/products` and `/products/[slug]` match the existing SPA exactly, so the

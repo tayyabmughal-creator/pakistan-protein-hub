@@ -35,11 +35,19 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
 
   let product: Product;
   try {
-    product = await loadProduct(slug);
-  } catch {
-    // A failed metadata fetch must not take down the page render. Next calls
-    // this separately and an exception here is a 500 even when the page itself
-    // would have rendered fine.
+    product = await getProduct(slug);
+  } catch (error) {
+    // Belt and braces with the notFound() in the page body.
+    //
+    // A missing product has to answer 404, not 200-with-404-content: Google
+    // treats a soft 404 as a real page and indexes it. This broke once
+    // already — a loading.tsx at the app root put every route behind a
+    // Suspense boundary, so headers were flushed before the component ran and
+    // notFound() could no longer set the status. generateMetadata runs before
+    // streaming starts, so this guard holds even if someone reintroduces one.
+    if (error instanceof NotFoundError) notFound();
+    // Any other failure: no metadata rather than a 500. The page render will
+    // surface the problem properly if it persists.
     return {};
   }
 

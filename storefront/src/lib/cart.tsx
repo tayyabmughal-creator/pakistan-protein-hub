@@ -36,6 +36,8 @@ const MAX_QUANTITY_PER_LINE = 99;
 
 export interface CartLine {
   variantId: number;
+  /** Sent alongside the variant so the server can check they belong together. */
+  productId: number;
   quantity: number;
   /** Display snapshot — re-priced by the server at checkout. */
   snapshot: {
@@ -112,6 +114,7 @@ function parseStored(raw: string | null): CartLine[] {
       const candidate = line as Partial<CartLine>;
       return (
         typeof candidate.variantId === "number" &&
+        typeof candidate.productId === "number" &&
         typeof candidate.quantity === "number" &&
         candidate.quantity > 0 &&
         typeof candidate.snapshot === "object" &&
@@ -183,6 +186,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
         type: "add",
         line: {
           variantId: variant.id,
+          productId: product.id,
           quantity: clamp(quantity),
           snapshot: {
             productName: product.name,
