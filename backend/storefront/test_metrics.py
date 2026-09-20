@@ -17,6 +17,18 @@ from storefront import metrics
 from users.models import User
 
 
+#: The legacy combined status, mapped to the fulfilment status that now carries
+#: the meaning. Metrics key on fulfilment_status, because that is what
+#: Order.is_settled uses and the two must not drift apart.
+FULFILMENT_FOR = {
+    "PENDING": Order.FULFILMENT_PENDING_CONFIRMATION,
+    "CONFIRMED": Order.FULFILMENT_CONFIRMED,
+    "SHIPPED": Order.FULFILMENT_SHIPPED,
+    "DELIVERED": Order.FULFILMENT_DELIVERED,
+    "CANCELLED": Order.FULFILMENT_CANCELLED,
+}
+
+
 def make_order(*, method, payment_status, status, total="1000.00"):
     order = Order.objects.create(
         guest_name="Customer",
@@ -27,6 +39,7 @@ def make_order(*, method, payment_status, status, total="1000.00"):
         shipping_address="addr",
         payment_method=method,
         payment_status=payment_status,
+        fulfilment_status=FULFILMENT_FOR[status],
         status=status,
     )
     OrderItem.objects.create(
@@ -135,3 +148,168 @@ class DashboardEndpointTests(APITestCase):
         self.assertEqual(
             Decimal(str(body["overview"]["pending_cod_value"])), Decimal("5000.00")
         )
+
+
+class SettledDefinitionAgreementTests(TestCase):
+    """The order property and the metrics query must never disagree.
+
+    Two definitions of "settled" in one codebase is the exact failure this
+    module was created to fix. These tests fail if they drift apart.
+    """
+
+    def _assert_agree(self):
+        via_property = sorted(order.id for order in Order.objects.all() if order.is_settled)
+        via_query = sorted(metrics.settled_orders().values_list("id", flat=True))
+        self.assertEqual(
+            via_property,
+            via_query,
+            "Order.is_settled and metrics.settled_orders() disagree",
+        )
+
+    def test_they_agree_across_every_combination(self):
+        from orders.models import Order as OrderModel
+
+        for method in ("COD", "SAFEPAY"):
+            for payment in [code for code, _ in OrderModel.PAYMENT_STATUS_CHOICES]:
+                for fulfilment in [code for code, _ in OrderModel.FULFILMENT_STATUS_CHOICES]:
+                    OrderModel.objects.create(
+                        guest_name="C",
+                        guest_email="c@example.com",
+                        guest_phone_number="03001234567",
+                        subtotal_amount=Decimal("100.00"),
+                        total_amount=Decimal("100.00"),
+                        shipping_address="addr",
+                        payment_method=method,
+                        payment_status=payment,
+                        fulfilment_status=fulfilment,
+                    )
+
+        self.assertGreater(Order.objects.count(), 50)
+        self._assert_agree()
+
+    def test_a_cancelled_paid_order_is_not_settled_either_way(self):
+        from orders.models import Order as OrderModel
+
+        OrderModel.objects.create(
+            guest_name="C", guest_email="c@example.com", guest_phone_number="0300",
+            subtotal_amount=Decimal("100.00"), total_amount=Decimal("100.00"),
+            shipping_address="addr", payment_method="SAFEPAY",
+            payment_status=OrderModel.PAYMENT_PAID,
+            fulfilment_status=OrderModel.FULFILMENT_CANCELLED,
+        )
+        self.assertEqual(metrics.revenue_summary()["revenue"], Decimal("0.00"))
+        self._assert_agree()
+
+    def test_a_partially_refunded_order_still_counts(self):
+        """Money was received and some was returned. Two facts, not one."""
+        from orders.models import Order as OrderModel
+
+        OrderModel.objects.create(
+            guest_name="C", guest_email="c@example.com", guest_phone_number="0300",
+            subtotal_amount=Decimal("100.00"), total_amount=Decimal("100.00"),
+            refunded_amount=Decimal("30.00"),
+            shipping_address="addr", payment_method="SAFEPAY",
+            payment_status=OrderModel.PAYMENT_PARTIALLY_REFUNDED,
+            fulfilment_status=OrderModel.FULFILMENT_DELIVERED,
+        )
+        # Not netted off: the refund is reported separately.
+        self.assertEqual(metrics.revenue_summary()["revenue"], Decimal("100.00"))
+        self._assert_agree()
+
+
+class InventoryHealthMetricTests(TestCase):
+    """Stock figures come from the ledger, not the legacy product column."""
+
+    def _variant(self, *, stock, slug, threshold=5):
+        from inventory.models import InventoryBalance
+        from products.models import Category, Product
+
+        category, _ = Category.objects.get_or_create(
+            slug="protein", defaults={"name": "Protein"}
+        )
+        product = Product.objects.create(
+            name=slug, slug=slug, category=category, brand="B", weight="2kg",
+            description="x", price=Decimal("1000.00"), stock=stock,
+        )
+        variant = product.variants.get()
+        InventoryBalance.objects.filter(variant=variant).update(low_stock_threshold=threshold)
+        return variant
+
+    def test_reserved_units_count_against_availability(self):
+        """The bug the legacy column could not express: 10 on hand, 9 reserved."""
+        from inventory import services
+
+        variant = self._variant(stock=10, slug="nearly-gone", threshold=5)
+        services.reserve(variant=variant, quantity=9, reference="order:1")
+
+        health = metrics.inventory_health()
+        self.assertEqual(health["low_stock"], 1)
+        self.assertEqual(health["units_reserved"], 9)
+
+    def test_a_per_item_threshold_is_respected(self):
+        """Not one hardcoded number for a 5-rupee sachet and a 20kg sack."""
+        self._variant(stock=10, slug="high-threshold", threshold=20)
+        self._variant(stock=10, slug="low-threshold", threshold=2)
+
+        self.assertEqual(metrics.inventory_health()["low_stock"], 1)
+
+    def test_never_counted_balances_are_surfaced(self):
+        self._variant(stock=10, slug="unverified")
+        self.assertEqual(metrics.inventory_health()["never_counted"], 1)
+
+    def test_low_stock_items_lists_the_worst_first(self):
+        self._variant(stock=1, slug="worst", threshold=5)
+        self._variant(stock=4, slug="better", threshold=5)
+
+        rows = metrics.low_stock_items()
+        self.assertEqual([row["available"] for row in rows], [1, 4])
+        self.assertTrue(rows[0]["never_counted"])
+
+
+class TopSellerTests(TestCase):
+    def test_top_sellers_are_reported_by_sku_not_product(self):
+        """Two flavours of one product are different things to reorder."""
+        from orders.models import Order as OrderModel, OrderItem
+
+        order = OrderModel.objects.create(
+            guest_name="C", guest_email="c@example.com", guest_phone_number="0300",
+            subtotal_amount=Decimal("300.00"), total_amount=Decimal("300.00"),
+            shipping_address="addr", payment_method="SAFEPAY",
+            payment_status=OrderModel.PAYMENT_PAID,
+            fulfilment_status=OrderModel.FULFILMENT_DELIVERED,
+        )
+        for sku, variant, quantity in (
+            ("PN-WHEY-CHOC", "Chocolate, 2kg", 5),
+            ("PN-WHEY-VAN", "Vanilla, 2kg", 2),
+        ):
+            OrderItem.objects.create(
+                order=order, product_name="Whey Gold", sku=sku,
+                variant_description=variant, brand_name="Optimum Nutrition",
+                quantity=quantity, price=Decimal("100.00"),
+                line_total=Decimal("100.00") * quantity,
+            )
+
+        rows = metrics.top_skus()
+        self.assertEqual(len(rows), 2)
+        self.assertEqual(rows[0]["sku"], "PN-WHEY-CHOC")
+        self.assertEqual(rows[0]["units"], 5)
+
+        brands = metrics.top_brands()
+        self.assertEqual(brands[0]["brand"], "Optimum Nutrition")
+        self.assertEqual(brands[0]["units"], 7)
+
+    def test_unsettled_orders_do_not_appear_in_top_sellers(self):
+        from orders.models import Order as OrderModel, OrderItem
+
+        order = OrderModel.objects.create(
+            guest_name="C", guest_email="c@example.com", guest_phone_number="0300",
+            subtotal_amount=Decimal("100.00"), total_amount=Decimal("100.00"),
+            shipping_address="addr", payment_method="COD",
+            payment_status=OrderModel.PAYMENT_COD_PENDING,
+            fulfilment_status=OrderModel.FULFILMENT_SHIPPED,
+        )
+        OrderItem.objects.create(
+            order=order, product_name="Whey", sku="PN-X", quantity=9,
+            price=Decimal("100.00"), line_total=Decimal("900.00"),
+        )
+        self.assertEqual(metrics.top_skus(), [])

@@ -105,6 +105,10 @@ class DashboardSummarySerializer(serializers.Serializer):
     top_products = serializers.ListField()
     low_stock_products = serializers.ListField()
     recent_orders = serializers.ListField()
+    top_skus = serializers.ListField()
+    top_brands = serializers.ListField()
+    fulfilment_breakdown = serializers.ListField()
+    payment_breakdown = serializers.ListField()
     metric_definitions = serializers.DictField()
 
 
@@ -132,6 +136,12 @@ class AdminOverviewSerializer(serializers.Serializer):
     guest_orders = serializers.IntegerField()
     active_products = serializers.IntegerField()
     low_stock_products = serializers.IntegerField()
+    out_of_stock_products = serializers.IntegerField()
+    never_counted_balances = serializers.IntegerField()
+    units_on_hand = serializers.IntegerField()
+    units_reserved = serializers.IntegerField()
+    open_returns = serializers.IntegerField()
+    returns_awaiting_decision = serializers.IntegerField()
     avg_order_value = serializers.DecimalField(max_digits=12, decimal_places=2)
 
 

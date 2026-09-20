@@ -57,9 +57,32 @@ class AdminDashboardSummaryView(APIView):
             "total_customers": User.objects.filter(is_staff=False).count(),
             "guest_orders": Order.objects.filter(user__isnull=True).count(),
             "active_products": Product.objects.filter(is_active=True).count(),
-            "low_stock_products": Product.objects.filter(stock__lte=5, is_active=True).count(),
             "avg_order_value": all_time["average_order_value"],
         }
+
+        # Stock figures come from the inventory ledger, not the legacy
+        # Product.stock column. That column is derived and carried a single
+        # hardcoded threshold, so an item with 10 on hand and 9 reserved looked
+        # healthy while being one sale from unsellable.
+        health = metrics.inventory_health()
+        overview.update(
+            {
+                "low_stock_products": health["low_stock"],
+                "out_of_stock_products": health["out_of_stock"],
+                "never_counted_balances": health["never_counted"],
+                "units_on_hand": health["units_on_hand"],
+                "units_reserved": health["units_reserved"],
+            }
+        )
+
+        returns = metrics.returns_summary()
+        overview.update(
+            {
+                "open_returns": returns["open"],
+                "returns_awaiting_decision": returns["awaiting_decision"],
+                "refunded_value": returns["refunded_value"],
+            }
+        )
 
         start_month = (month_start - timedelta(days=150)).replace(day=1)
         revenue_trend_qs = (
@@ -123,11 +146,9 @@ class AdminDashboardSummaryView(APIView):
             for entry in top_products_qs
         ]
 
-        low_stock_products = list(
-            Product.objects.filter(is_active=True, stock__lte=5)
-            .values("id", "name", "stock", "brand")
-            .order_by("stock", "name")[:8]
-        )
+        # Worst first, and each row says whether its figure has ever been
+        # checked against a shelf.
+        low_stock_products = metrics.low_stock_items(limit=8)
 
         recent_orders = [
             {
@@ -148,7 +169,11 @@ class AdminDashboardSummaryView(APIView):
                 "customer_growth": customer_growth,
                 "order_status_breakdown": order_status_breakdown,
                 "top_products": top_products,
+                "top_skus": metrics.top_skus(),
+                "top_brands": metrics.top_brands(),
                 "low_stock_products": low_stock_products,
+                "fulfilment_breakdown": metrics.fulfilment_breakdown(),
+                "payment_breakdown": metrics.payment_breakdown(),
                 "recent_orders": recent_orders,
                 # Shipped with the numbers so nobody has to guess what a figure
                 # counted, and so a change in definition is visible in the API.
