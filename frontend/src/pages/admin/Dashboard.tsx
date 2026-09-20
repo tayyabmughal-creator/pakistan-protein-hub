@@ -13,12 +13,19 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import { AlertTriangle, ShoppingCart, TrendingUp, UserRound } from "lucide-react";
+import { AlertTriangle, Banknote, Info, ShoppingCart, TrendingUp, UserRound } from "lucide-react";
+import { Link } from "react-router-dom";
 import AdminLayout from "@/components/admin/AdminLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Tooltip as UiTooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { fetchAdminDashboard } from "@/lib/api";
 import { useIsMobile } from "@/hooks/use-mobile";
-import type { DashboardOverview, DashboardSummary, LowStockProduct, OrderStatusCount, RecentOrder } from "@/lib/types";
+import type { DashboardOverview, DashboardSummary, LowStockProduct, OrderStatusCount, RecentOrder, TopBrand, TopSku } from "@/lib/types";
 
 const statusColors: Record<string, string> = {
   PENDING: "#f59e0b",
@@ -46,11 +53,38 @@ const Dashboard = () => {
   }, []);
 
   const overview: Partial<DashboardOverview> = dashboard?.overview ?? {};
+  const definitions = dashboard?.metric_definitions ?? {};
+
   const statCards = [
-    { title: "Total Revenue", value: `Rs. ${Number(overview.total_revenue || 0).toLocaleString()}`, icon: TrendingUp, color: "text-amber-400" },
-    { title: "Monthly Revenue", value: `Rs. ${Number(overview.monthly_revenue || 0).toLocaleString()}`, icon: TrendingUp, color: "text-primary" },
-    { title: "Total Orders", value: overview.total_orders || 0, icon: ShoppingCart, color: "text-blue-400" },
-    { title: "Customers", value: overview.total_customers || 0, icon: UserRound, color: "text-indigo-400" },
+    {
+      title: "Settled revenue",
+      value: `Rs. ${Number(overview.total_revenue || 0).toLocaleString()}`,
+      icon: TrendingUp,
+      color: "text-amber-400",
+      // Named "settled", not "total". It is money received, not money invoiced.
+      definition: definitions.settled_revenue,
+    },
+    {
+      title: "This month",
+      value: `Rs. ${Number(overview.monthly_revenue || 0).toLocaleString()}`,
+      icon: TrendingUp,
+      color: "text-primary",
+      definition: definitions.monthly_settled_revenue,
+    },
+    {
+      title: "COD outstanding",
+      value: `Rs. ${Number(overview.pending_cod_value || 0).toLocaleString()}`,
+      icon: Banknote,
+      color: "text-amber-500",
+      definition: definitions.pending_cod_value,
+    },
+    {
+      title: "Customers",
+      value: overview.total_customers || 0,
+      icon: UserRound,
+      color: "text-indigo-400",
+      definition: definitions.total_customers,
+    },
   ];
   const pieInnerRadius = isMobile ? 42 : 65;
   const pieOuterRadius = isMobile ? 72 : 100;
@@ -66,7 +100,27 @@ const Dashboard = () => {
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold font-heading break-words">{loading ? "..." : card.value}</div>
-              <p className="text-xs text-muted-foreground mt-1">Live store data</p>
+              {/* Every figure carries the definition the backend computed it
+                  from. "Revenue" meaning two different things on one screen is
+                  the bug this replaces. */}
+              {card.definition ? (
+                <TooltipProvider>
+                  <UiTooltip>
+                    <TooltipTrigger asChild>
+                      <button
+                        type="button"
+                        className="mt-1 flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
+                      >
+                        <Info className="h-3 w-3" />
+                        How this is counted
+                      </button>
+                    </TooltipTrigger>
+                    <TooltipContent className="max-w-xs text-xs">{card.definition}</TooltipContent>
+                  </UiTooltip>
+                </TooltipProvider>
+              ) : (
+                <p className="text-xs text-muted-foreground mt-1">Live store data</p>
+              )}
             </CardContent>
           </Card>
         ))}
@@ -174,24 +228,108 @@ const Dashboard = () => {
           </CardHeader>
           <CardContent className="space-y-3">
             {(dashboard?.low_stock_products || []).length > 0 ? (
-              dashboard.low_stock_products.map((product: LowStockProduct) => (
-                <div key={product.id} className="flex flex-col gap-3 rounded-xl border border-border/60 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+              dashboard.low_stock_products.map((item: LowStockProduct) => (
+                <div key={item.sku} className="flex flex-col gap-3 rounded-xl border border-border/60 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
                   <div className="min-w-0">
-                    <p className="font-medium">{product.name}</p>
-                    <p className="text-xs text-muted-foreground">{product.brand}</p>
+                    <p className="font-medium">{item.name}</p>
+                    <p className="text-xs text-muted-foreground">
+                      <code>{item.sku}</code>
+                      {item.variant && ` · ${item.variant}`} · {item.brand}
+                    </p>
                   </div>
-                  <div className="flex items-center gap-2 text-amber-400">
-                    <AlertTriangle className="h-4 w-4" />
-                    <span className="font-semibold">{product.stock} left</span>
+                  <div className="flex items-center gap-3">
+                    {/* Reserved units are why "on hand" alone misleads. */}
+                    {item.reserved > 0 && (
+                      <span className="text-xs text-muted-foreground">
+                        {item.on_hand} on hand · {item.reserved} reserved
+                      </span>
+                    )}
+                    <div className={`flex items-center gap-2 ${item.available <= 0 ? "text-destructive" : "text-amber-400"}`}>
+                      <AlertTriangle className="h-4 w-4" />
+                      <span className="font-semibold">
+                        {item.available <= 0 ? "None available" : `${item.available} available`}
+                      </span>
+                    </div>
                   </div>
                 </div>
               ))
             ) : (
-              <p className="text-sm text-muted-foreground">No low-stock products right now.</p>
+              <p className="text-sm text-muted-foreground">Nothing is running low.</p>
+            )}
+
+            {Number(overview.never_counted_balances) > 0 && (
+              <Link
+                to="/admin/inventory"
+                className="flex items-center gap-2 rounded-xl border border-amber-500/40 bg-amber-500/5 px-4 py-3 text-sm transition-colors hover:border-amber-500"
+              >
+                <AlertTriangle className="h-4 w-4 shrink-0 text-amber-500" />
+                <span>
+                  <strong>{overview.never_counted_balances}</strong> stock figure
+                  {overview.never_counted_balances === 1 ? " has" : "s have"} never been
+                  counted. These came from the old system and are unverified.
+                </span>
+              </Link>
             )}
           </CardContent>
         </Card>
 
+        <Card className="bg-card-gradient border-border">
+          <CardHeader>
+            <CardTitle className="font-heading">Best sellers</CardTitle>
+            <p className="text-xs text-muted-foreground">
+              By SKU, because two flavours of one product are different things to reorder.
+            </p>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            {(dashboard?.top_skus || []).length > 0 ? (
+              dashboard.top_skus.map((row: TopSku) => (
+                <div
+                  key={row.sku}
+                  className="flex items-center justify-between gap-3 rounded-xl border border-border/60 px-4 py-3"
+                >
+                  <div className="min-w-0">
+                    <p className="truncate font-medium">{row.name}</p>
+                    <p className="text-xs text-muted-foreground">
+                      <code>{row.sku}</code>
+                      {row.variant && ` · ${row.variant}`}
+                    </p>
+                  </div>
+                  <div className="shrink-0 text-right">
+                    <p className="font-semibold tabular-nums">{row.units} sold</p>
+                    <p className="text-xs text-muted-foreground">
+                      Rs. {Number(row.revenue).toLocaleString()}
+                    </p>
+                  </div>
+                </div>
+              ))
+            ) : (
+              <p className="text-sm text-muted-foreground">
+                Nothing sold yet in the settled population.
+              </p>
+            )}
+
+            {(dashboard?.top_brands || []).length > 0 && (
+              <div className="pt-2">
+                <p className="mb-2 text-xs uppercase tracking-wider text-muted-foreground">
+                  Top brands
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  {dashboard.top_brands.map((row: TopBrand) => (
+                    <span
+                      key={row.brand}
+                      className="rounded-full border border-border px-3 py-1 text-xs"
+                    >
+                      {row.brand} · Rs. {Number(row.revenue).toLocaleString()}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+
+      <div className="mt-8 grid grid-cols-1 gap-6 xl:grid-cols-2 xl:gap-8">
         <Card className="bg-card-gradient border-border">
           <CardHeader>
             <CardTitle className="font-heading">Ops Snapshot</CardTitle>
@@ -202,12 +340,12 @@ const Dashboard = () => {
               <p className="mt-2 text-2xl font-bold">{overview.pending_orders || 0}</p>
             </div>
             <div className="rounded-xl border border-border/60 p-4">
-              <p className="text-xs uppercase tracking-wider text-muted-foreground">Guest Orders</p>
-              <p className="mt-2 text-2xl font-bold">{overview.guest_orders || 0}</p>
+              <p className="text-xs uppercase tracking-wider text-muted-foreground">Open Returns</p>
+              <p className="mt-2 text-2xl font-bold">{overview.open_returns || 0}</p>
             </div>
             <div className="rounded-xl border border-border/60 p-4">
-              <p className="text-xs uppercase tracking-wider text-muted-foreground">Active Products</p>
-              <p className="mt-2 text-2xl font-bold">{overview.active_products || 0}</p>
+              <p className="text-xs uppercase tracking-wider text-muted-foreground">Out of Stock</p>
+              <p className="mt-2 text-2xl font-bold">{overview.out_of_stock_products || 0}</p>
             </div>
             <div className="rounded-xl border border-border/60 p-4">
               <p className="text-xs uppercase tracking-wider text-muted-foreground">Avg Order Value</p>

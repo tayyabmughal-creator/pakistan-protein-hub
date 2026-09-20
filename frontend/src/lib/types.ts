@@ -335,8 +335,19 @@ export interface DashboardOverview {
   total_customers: number;
   guest_orders: number;
   active_products: number;
-  low_stock_products: number;
   avg_order_value: Money;
+
+  // Stock, from the inventory ledger rather than the legacy product column.
+  low_stock_products: number;
+  out_of_stock_products: number;
+  /** Balances migrated from the old system and never checked against a shelf. */
+  never_counted_balances: number;
+  units_on_hand: number;
+  units_reserved: number;
+
+  open_returns: number;
+  returns_awaiting_decision: number;
+  refunded_value: Money;
 }
 
 export interface RevenueTrendPoint {
@@ -362,10 +373,34 @@ export interface TopProduct {
 }
 
 export interface LowStockProduct {
-  id: number;
+  sku: string;
   name: string;
-  stock: number;
+  variant: string;
   brand: string;
+  on_hand: number;
+  reserved: number;
+  available: number;
+  never_counted: boolean;
+}
+
+export interface TopSku {
+  sku: string;
+  name: string;
+  variant: string;
+  units: number;
+  revenue: Money;
+}
+
+export interface TopBrand {
+  brand: string;
+  units: number;
+  revenue: Money;
+}
+
+export interface StatusBreakdownEntry {
+  status: string;
+  label: string;
+  count: number;
 }
 
 export interface RecentOrder {
@@ -384,6 +419,10 @@ export interface DashboardSummary {
   order_status_breakdown: OrderStatusCount[];
   top_products: TopProduct[];
   low_stock_products: LowStockProduct[];
+  top_skus: TopSku[];
+  top_brands: TopBrand[];
+  fulfilment_breakdown: StatusBreakdownEntry[];
+  payment_breakdown: StatusBreakdownEntry[];
   recent_orders: RecentOrder[];
   /** Exact definition of each figure above, published by the API. */
   metric_definitions: Record<string, string>;
