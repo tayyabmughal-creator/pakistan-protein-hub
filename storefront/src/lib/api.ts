@@ -31,6 +31,7 @@ import type {
   Paginated,
   Product,
   ProductCard,
+  ShopSettings,
   Sitemap,
 } from "./types";
 
@@ -168,6 +169,16 @@ export function listCategories() {
 
 export function listGoals() {
   return get<Goal[]>("/goals/", { tags: ["taxonomy"] });
+}
+
+export function getSettings() {
+  // Policy changes when someone edits a constant and redeploys, so it can be
+  // cached for a long time — but not forever, or a shipping change would need
+  // a storefront redeploy to become visible.
+  return get<ShopSettings>("/settings/", {
+    revalidate: 900,
+    tags: ["settings"],
+  });
 }
 
 export function getSitemap() {

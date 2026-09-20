@@ -305,6 +305,17 @@ jobs:
           check /sitemap.xml 200
           check /robots.txt 200
 
+          # Linked from the nav and the footer. These 404'd for a while
+          # because they were linked before they existed, which is a broken
+          # link on every single page of the site.
+          check /about 200
+          check /contact 200
+          check /faq 200
+          check /shipping 200
+          check /returns 200
+          check /privacy 200
+          check /terms 200
+
           # A missing product must answer 404, not 200 with not-found content.
           # A loading.tsx at the app root silently turned every one of these
           # into a soft 404 that Google would index as a real page; this is the

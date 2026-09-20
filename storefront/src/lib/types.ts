@@ -164,3 +164,22 @@ export interface Sitemap {
   brands: SitemapEntry[];
   goals: SitemapEntry[];
 }
+
+/**
+ * Shop policy the server owns.
+ *
+ * `comparison` is not decoration: the server charges delivery unless the
+ * subtotal is *strictly* greater than `free_over`, so an order of exactly
+ * Rs 5,000 pays it. Copy that reads "free on orders of 5,000 and above" is a
+ * promise checkout breaks, which is why the rule is published rather than
+ * restated in the frontend.
+ */
+export interface ShopSettings {
+  currency: string;
+  shipping: {
+    free_over: Money;
+    comparison: "greater_than" | "greater_or_equal";
+    standard_fee: Money;
+  };
+  cod_available: boolean;
+}
