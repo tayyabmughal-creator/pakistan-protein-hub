@@ -24,6 +24,18 @@ from .views_admin import (
     AdminPaymentSessionReviewActionView,
     AdminPaymentSessionReviewListView,
 )
+from .views_admin_v2 import (
+    AdminOrderDetailV2View,
+    AdminOrderListV2View,
+    AdminOrderNoteView,
+    AdminOrderQueueView,
+    AdminOrderReturnCreateView,
+    AdminOrderTransitionV2View,
+    AdminReturnDecisionView,
+    AdminReturnListView,
+    AdminReturnReceiveView,
+    AdminReturnRefundView,
+)
 
 urlpatterns = [
     path('payment-methods/', PaymentMethodListView.as_view(), name='payment-method-list'),
@@ -46,4 +58,19 @@ urlpatterns = [
     path('admin/orders/<int:pk>/transition/', AdminOrderTransitionView.as_view(), name='admin-order-transition'),
     path('admin/payment-sessions/', AdminPaymentSessionReviewListView.as_view(), name='admin-payment-session-list'),
     path('admin/payment-sessions/<uuid:public_id>/action/', AdminPaymentSessionReviewActionView.as_view(), name='admin-payment-session-action'),
+
+    # v2 admin. Capability-gated, paginated, and every state change is a named
+    # command rather than a PATCH. The v1 routes above stay until the Expo admin
+    # app and the current SPA screens have moved over.
+    path('admin/v2/orders/', AdminOrderListV2View.as_view(), name='admin-v2-order-list'),
+    path('admin/v2/orders/queues/', AdminOrderQueueView.as_view(), name='admin-v2-order-queues'),
+    path('admin/v2/orders/<int:pk>/', AdminOrderDetailV2View.as_view(), name='admin-v2-order-detail'),
+    path('admin/v2/orders/<int:pk>/transition/', AdminOrderTransitionV2View.as_view(), name='admin-v2-order-transition'),
+    path('admin/v2/orders/<int:pk>/note/', AdminOrderNoteView.as_view(), name='admin-v2-order-note'),
+    path('admin/v2/orders/<int:pk>/returns/', AdminOrderReturnCreateView.as_view(), name='admin-v2-order-return-create'),
+
+    path('admin/v2/returns/', AdminReturnListView.as_view(), name='admin-v2-return-list'),
+    path('admin/v2/returns/<int:pk>/decision/', AdminReturnDecisionView.as_view(), name='admin-v2-return-decision'),
+    path('admin/v2/returns/<int:pk>/receive/', AdminReturnReceiveView.as_view(), name='admin-v2-return-receive'),
+    path('admin/v2/returns/<int:pk>/refund/', AdminReturnRefundView.as_view(), name='admin-v2-return-refund'),
 ]
