@@ -9,9 +9,16 @@
 
 import apiClient from "./apiClient";
 import type {
+  AdminBrand,
+  AdminCategoryRow,
+  AdminGoal,
+  AdminMedia,
   AdminOrderDetail,
   AdminOrderRow,
+  AdminProductDetail,
+  AdminProductRow,
   AdminReturn,
+  AdminVariant,
   InventoryBalance,
   OrderQueues,
   Paginated,
@@ -165,6 +172,97 @@ export const refundReturn = async (
   const response = await apiClient.post<AdminReturn>(
     `/admin/v2/returns/${id}/refund/`,
     payload,
+  );
+  return response.data;
+};
+
+// -- catalogue --------------------------------------------------------------
+
+export const fetchAdminProducts = async (params?: Params) => {
+  const response = await apiClient.get<Paginated<AdminProductRow>>(
+    "/admin/v2/catalog/products/",
+    { params: clean(params) },
+  );
+  return response.data;
+};
+
+export const fetchAdminProduct = async (id: number) => {
+  const response = await apiClient.get<AdminProductDetail>(
+    `/admin/v2/catalog/products/${id}/`,
+  );
+  return response.data;
+};
+
+export const updateAdminProduct = async (
+  id: number,
+  payload: Partial<AdminProductDetail>,
+) => {
+  const response = await apiClient.patch<AdminProductDetail>(
+    `/admin/v2/catalog/products/${id}/`,
+    payload,
+  );
+  return response.data;
+};
+
+/** Publishing is a command: the API checks completeness and may refuse. */
+export const setProductPublished = async (id: number, publish: boolean) => {
+  const response = await apiClient.post<AdminProductDetail>(
+    `/admin/v2/catalog/products/${id}/publish/`,
+    { publish },
+  );
+  return response.data;
+};
+
+export const createVariant = async (payload: Partial<AdminVariant>) => {
+  const response = await apiClient.post<AdminVariant>(
+    "/admin/v2/catalog/variants/",
+    payload,
+  );
+  return response.data;
+};
+
+export const updateVariant = async (id: number, payload: Partial<AdminVariant>) => {
+  const response = await apiClient.patch<AdminVariant>(
+    `/admin/v2/catalog/variants/${id}/`,
+    payload,
+  );
+  return response.data;
+};
+
+export const deleteVariant = async (id: number) => {
+  await apiClient.delete(`/admin/v2/catalog/variants/${id}/`);
+};
+
+export const updateMedia = async (id: number, payload: Partial<AdminMedia>) => {
+  const response = await apiClient.patch<AdminMedia>(
+    `/admin/v2/catalog/media/${id}/`,
+    payload,
+  );
+  return response.data;
+};
+
+export const deleteMedia = async (id: number) => {
+  await apiClient.delete(`/admin/v2/catalog/media/${id}/`);
+};
+
+export const fetchAdminBrands = async () => {
+  const response = await apiClient.get<AdminBrand[]>("/admin/v2/catalog/brands/");
+  return response.data;
+};
+
+export const createBrand = async (payload: Partial<AdminBrand>) => {
+  const response = await apiClient.post<AdminBrand>("/admin/v2/catalog/brands/", payload);
+  return response.data;
+};
+
+export const fetchAdminGoals = async () => {
+  const response = await apiClient.get<AdminGoal[]>("/admin/v2/catalog/goals/");
+  return response.data;
+};
+
+export const fetchAdminCategoriesV2 = async () => {
+  const response = await apiClient.get<AdminCategoryRow[]>(
+    "/admin/v2/catalog/categories/",
   );
   return response.data;
 };

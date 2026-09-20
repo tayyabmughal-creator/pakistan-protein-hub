@@ -38,6 +38,7 @@ const AdminOrders = lazy(() => import("./pages/admin/Orders"));
 const AdminInventory = lazy(() => import("./pages/admin/Inventory"));
 const AdminOrdersV2 = lazy(() => import("./pages/admin/OrdersV2"));
 const AdminReturns = lazy(() => import("./pages/admin/Returns"));
+const AdminCatalog = lazy(() => import("./pages/admin/Catalog"));
 const AdminPaymentReviews = lazy(() => import("./pages/admin/PaymentReviews"));
 const AdminUsers = lazy(() => import("./pages/admin/Users"));
 const AdminHomepageSettings = lazy(() => import("./pages/admin/HomepageSettings"));
@@ -111,6 +112,7 @@ const App = () => (
                 <Route path="/admin/orders/legacy" element={<ProtectedRoute requireStaff><AdminOrders /></ProtectedRoute>} />
                 <Route path="/admin/inventory" element={<ProtectedRoute requireStaff><AdminInventory /></ProtectedRoute>} />
                 <Route path="/admin/returns" element={<ProtectedRoute requireStaff><AdminReturns /></ProtectedRoute>} />
+                <Route path="/admin/catalog" element={<ProtectedRoute requireStaff><AdminCatalog /></ProtectedRoute>} />
                 <Route path="/admin/payments" element={<ProtectedRoute requireStaff><AdminPaymentReviews /></ProtectedRoute>} />
                 <Route path="/admin/users" element={<ProtectedRoute requireStaff><AdminUsers /></ProtectedRoute>} />
                 <Route path="/admin/customers" element={<ProtectedRoute requireStaff><AdminUsers /></ProtectedRoute>} />

@@ -652,3 +652,151 @@ export interface AdminReturn {
   is_open: boolean;
   items: AdminReturnLine[];
 }
+
+// --------------------------------------------------------------------------
+// Admin: catalogue
+// --------------------------------------------------------------------------
+
+export interface AdminBrand {
+  id: number;
+  name: string;
+  slug: string;
+  logo: string | null;
+  description: string;
+  country_of_origin: string;
+  seo_title: string;
+  seo_description: string;
+  is_active: boolean;
+  sort_order: number;
+  product_count: number;
+}
+
+export interface AdminGoal {
+  id: number;
+  name: string;
+  slug: string;
+  description: string;
+  sort_order: number;
+  is_active: boolean;
+}
+
+export interface AdminCategoryRow {
+  id: number;
+  name: string;
+  slug: string;
+  image: string | null;
+  description: string;
+  seo_title: string;
+  seo_description: string;
+  sort_order: number;
+  is_active: boolean;
+  product_count: number;
+}
+
+export interface AdminVariant {
+  id: number;
+  product: number;
+  sku: string;
+  barcode: string;
+  flavor: string;
+  size_label: string;
+  net_weight_grams: number | null;
+  serving_count: number | null;
+  serving_size: string;
+  price: Money;
+  compare_at_price: Money | null;
+  has_genuine_discount: boolean;
+  discount_percentage: number;
+  is_active: boolean;
+  is_default: boolean;
+  sort_order: number;
+  descriptor: string;
+  /** Reported here, but changed only through the inventory operations. */
+  on_hand: number;
+  reserved: number;
+  available: number;
+  never_counted: boolean;
+}
+
+export interface AdminMedia {
+  id: number;
+  product: number;
+  variant: number | null;
+  image: string;
+  alt_text: string;
+  sort_order: number;
+  is_primary: boolean;
+  created_at: IsoDateTime;
+}
+
+export interface CompletenessCheck {
+  key: string;
+  label: string;
+  passed: boolean;
+  /** Blocking checks are the ones that make a live page wrong or unbuyable. */
+  blocking: boolean;
+  why: string;
+}
+
+export interface Completeness {
+  checks: CompletenessCheck[];
+  score: number;
+  can_publish: boolean;
+  blocking: string[];
+}
+
+export type PublishStatus = "DRAFT" | "PUBLISHED" | "ARCHIVED";
+
+export interface AdminProductRow {
+  id: number;
+  name: string;
+  slug: string;
+  brand_ref: number | null;
+  brand_name: string;
+  category: number;
+  category_name: string;
+  supplement_type: string;
+  publish_status: PublishStatus;
+  is_active: boolean;
+  variant_count: number;
+  media_count: number;
+  total_available: number;
+  primary_image: string | null;
+  created_at: IsoDateTime;
+  updated_at: IsoDateTime;
+}
+
+export interface NutritionRow {
+  label: string;
+  amount?: string;
+  daily_value?: string;
+}
+
+export interface AdminProductDetail {
+  id: number;
+  name: string;
+  /** Read-only: a live URL. Renaming breaks every inbound link. */
+  slug: string;
+  category: number;
+  brand_ref: number | null;
+  brand_name: string;
+  short_description: string;
+  description: string;
+  benefits: string;
+  ingredients: string;
+  usage_directions: string;
+  warnings: string;
+  allergens: string;
+  nutrition_facts: NutritionRow[];
+  supplement_type: string;
+  goal_ids: number[];
+  seo_title: string;
+  seo_description: string;
+  publish_status: PublishStatus;
+  is_active: boolean;
+  variants: AdminVariant[];
+  media: AdminMedia[];
+  completeness: Completeness;
+  created_at: IsoDateTime;
+  updated_at: IsoDateTime;
+}
