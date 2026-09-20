@@ -36,6 +36,7 @@ const AdminCategories = lazy(() => import("./pages/admin/Categories"));
 const AdminPromotions = lazy(() => import("./pages/admin/Promotions"));
 const AdminOrders = lazy(() => import("./pages/admin/Orders"));
 const AdminInventory = lazy(() => import("./pages/admin/Inventory"));
+const AdminOrdersV2 = lazy(() => import("./pages/admin/OrdersV2"));
 const AdminPaymentReviews = lazy(() => import("./pages/admin/PaymentReviews"));
 const AdminUsers = lazy(() => import("./pages/admin/Users"));
 const AdminHomepageSettings = lazy(() => import("./pages/admin/HomepageSettings"));
@@ -105,7 +106,8 @@ const App = () => (
                 <Route path="/admin/products/edit/:id" element={<ProtectedRoute requireStaff><ProductForm /></ProtectedRoute>} />
                 <Route path="/admin/categories" element={<ProtectedRoute requireStaff><AdminCategories /></ProtectedRoute>} />
                 <Route path="/admin/promotions" element={<ProtectedRoute requireStaff><AdminPromotions /></ProtectedRoute>} />
-                <Route path="/admin/orders" element={<ProtectedRoute requireStaff><AdminOrders /></ProtectedRoute>} />
+                <Route path="/admin/orders" element={<ProtectedRoute requireStaff><AdminOrdersV2 /></ProtectedRoute>} />
+                <Route path="/admin/orders/legacy" element={<ProtectedRoute requireStaff><AdminOrders /></ProtectedRoute>} />
                 <Route path="/admin/inventory" element={<ProtectedRoute requireStaff><AdminInventory /></ProtectedRoute>} />
                 <Route path="/admin/payments" element={<ProtectedRoute requireStaff><AdminPaymentReviews /></ProtectedRoute>} />
                 <Route path="/admin/users" element={<ProtectedRoute requireStaff><AdminUsers /></ProtectedRoute>} />
