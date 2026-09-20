@@ -195,8 +195,13 @@ class Product(models.Model):
     seo_title = models.CharField(max_length=70, blank=True, default="")
     seo_description = models.CharField(max_length=160, blank=True, default="")
 
+    # New products start as drafts. Defaulting to PUBLISHED meant a product
+    # created through any path went live immediately — before it had an image,
+    # a real price or a brand — which is exactly what the completeness
+    # checklist exists to prevent. Existing products were set to PUBLISHED
+    # explicitly by the catalogue migration, so this changes nothing for them.
     publish_status = models.CharField(
-        max_length=12, choices=PUBLISH_STATUS_CHOICES, default=STATUS_PUBLISHED, db_index=True
+        max_length=12, choices=PUBLISH_STATUS_CHOICES, default=STATUS_DRAFT, db_index=True
     )
 
     # -- legacy, derived; see the module docstring ------------------------

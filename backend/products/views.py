@@ -5,7 +5,9 @@ from .serializers import ProductSerializer, CategorySerializer
 from rest_framework.permissions import AllowAny, IsAdminUser
 
 class ProductListView(generics.ListAPIView):
-    queryset = Product.objects.filter(is_active=True)
+    # Published *and* active. is_active alone would show drafts to customers
+    # while the admin considered them unpublished.
+    queryset = Product.objects.filter(is_active=True, publish_status=Product.STATUS_PUBLISHED)
     serializer_class = ProductSerializer
     permission_classes = [AllowAny]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
@@ -32,7 +34,7 @@ class ProductListView(generics.ListAPIView):
         return queryset
 
 class ProductDetailView(generics.RetrieveAPIView):
-    queryset = Product.objects.filter(is_active=True)
+    queryset = Product.objects.filter(is_active=True, publish_status=Product.STATUS_PUBLISHED)
     serializer_class = ProductSerializer
     permission_classes = [AllowAny]
     lookup_field = 'slug'

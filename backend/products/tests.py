@@ -18,6 +18,9 @@ class ProductApiTests(APITestCase):
             discount_price="7999.00",
             stock=12,
             is_active=True,
+            # Products now default to draft so nothing goes live before it is
+            # complete. A storefront test needs a published one.
+            publish_status=Product.STATUS_PUBLISHED,
         )
 
     def test_product_list_supports_category_slug_filter(self):
