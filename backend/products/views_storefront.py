@@ -385,6 +385,38 @@ class StorefrontFiltersView(APIView):
         )
 
 
+class StorefrontSettingsView(APIView):
+    """GET /api/v2/storefront/settings/
+
+    Shop-wide policy the storefront displays. Served rather than duplicated in
+    the frontend so the page and the checkout cannot disagree about money.
+
+    The shipping threshold is a strict `>` on the server, so an order of
+    exactly Rs 5,000 pays delivery. A storefront that hardcoded "free over
+    5,000" and rendered it as "5,000 and above" would promise free delivery on
+    the boundary and then charge for it — the comparison is published here so
+    the copy can be written to match.
+    """
+
+    permission_classes = [AllowAny]
+    authentication_classes = []
+
+    def get(self, request):
+        from orders.services import FREE_SHIPPING_THRESHOLD, STANDARD_SHIPPING_FEE
+
+        return Response(
+            {
+                "currency": "PKR",
+                "shipping": {
+                    "free_over": str(FREE_SHIPPING_THRESHOLD),
+                    "comparison": "greater_than",
+                    "standard_fee": str(STANDARD_SHIPPING_FEE),
+                },
+                "cod_available": True,
+            }
+        )
+
+
 class StorefrontBrandListView(generics.ListAPIView):
     serializer_class = StorefrontBrandSerializer
     permission_classes = [AllowAny]

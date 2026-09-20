@@ -521,3 +521,73 @@ class StorefrontAPITestCase(TestCase):
         self.assertEqual(
             detail["benefit_list"], ["24g protein", "5.5g BCAAs", "Low sugar"]
         )
+
+    # -- shop settings ---------------------------------------------------
+
+    def test_settings_reports_the_shipping_rule_the_server_actually_applies(self):
+        """The storefront must not hardcode the shipping threshold.
+
+        The server charges delivery unless subtotal is strictly greater than
+        the threshold, so an order of exactly Rs 5,000 pays it. Copy that says
+        "free on orders of 5,000 and above" would be a promise the checkout
+        breaks. Serving the rule — including which comparison it is — is what
+        lets the page word it correctly.
+        """
+        from orders.services import FREE_SHIPPING_THRESHOLD, STANDARD_SHIPPING_FEE
+
+        data = self.client.get(reverse("storefront_v2:settings")).data
+        self.assertEqual(data["currency"], "PKR")
+        self.assertEqual(data["shipping"]["free_over"], str(FREE_SHIPPING_THRESHOLD))
+        self.assertEqual(data["shipping"]["standard_fee"], str(STANDARD_SHIPPING_FEE))
+        self.assertEqual(data["shipping"]["comparison"], "greater_than")
+
+    def test_published_shipping_comparison_matches_the_checkout_calculation(self):
+        """Proves the published comparison is the one the code performs.
+
+        Asserting the strings match is not enough — `comparison` could say
+        greater_than while the service used >=. This exercises the boundary.
+        """
+        from orders.services import (
+            FREE_SHIPPING_THRESHOLD,
+            _shipping_fee_for_subtotal,
+        )
+
+        data = self.client.get(reverse("storefront_v2:settings")).data
+        at_threshold = _shipping_fee_for_subtotal(FREE_SHIPPING_THRESHOLD)
+        just_over = _shipping_fee_for_subtotal(FREE_SHIPPING_THRESHOLD + Decimal("1"))
+
+        if data["shipping"]["comparison"] == "greater_than":
+            self.assertGreater(
+                at_threshold, 0, "exactly at the threshold must still pay delivery"
+            )
+            self.assertEqual(just_over, 0)
+        else:
+            self.assertEqual(at_threshold, 0)
+
+    # -- image URLs ------------------------------------------------------
+
+    def test_image_urls_are_absolute_on_both_card_and_detail(self):
+        """The storefront is a different origin from Django.
+
+        A relative /media/... path resolves against the Next server, which does
+        not serve Django's media, so every product image would 404. DRF builds
+        absolute URLs for ImageField automatically; hand-written image fields
+        have to do it explicitly, and this pins that they agree.
+        """
+        product = self.make_product("Pictured", slug="pictured")
+        self.make_variant(product, sku="PIC-1", price="9000", stock=1)
+        ProductMedia.objects.create(
+            product=product, image="products/test.jpg", is_primary=True
+        )
+
+        card = self.list_products().data["results"][0]
+        detail = self.client.get(
+            reverse("storefront_v2:product-detail", args=["pictured"])
+        ).data
+
+        self.assertTrue(
+            card["image"]["url"].startswith("http"),
+            f"card image must be absolute, got {card['image']['url']}",
+        )
+        self.assertTrue(detail["media"][0]["image"].startswith("http"))
+        self.assertEqual(card["image"]["url"], detail["media"][0]["image"])

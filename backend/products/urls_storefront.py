@@ -16,6 +16,7 @@ from .views_storefront import (
     StorefrontProductDetailView,
     StorefrontProductListView,
     StorefrontRelatedProductsView,
+    StorefrontSettingsView,
     StorefrontSitemapView,
 )
 
@@ -37,5 +38,6 @@ urlpatterns = [
     path("v2/storefront/brands/", StorefrontBrandListView.as_view(), name="brand-list"),
     path("v2/storefront/categories/", StorefrontCategoryListView.as_view(), name="category-list"),
     path("v2/storefront/goals/", StorefrontGoalListView.as_view(), name="goal-list"),
+    path("v2/storefront/settings/", StorefrontSettingsView.as_view(), name="settings"),
     path("v2/storefront/sitemap/", StorefrontSitemapView.as_view(), name="sitemap"),
 ]

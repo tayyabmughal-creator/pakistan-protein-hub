@@ -148,9 +148,19 @@ class StorefrontProductCardSerializer(serializers.ModelSerializer):
 
     def get_image(self, obj):
         media = obj.primary_image
-        if media and media.image:
-            return {"url": media.image.url, "alt": media.alt_text or obj.name}
-        return None
+        if not media or not media.image:
+            return None
+        # Absolute, like every other image field in this API. DRF's ImageField
+        # builds an absolute URI from the request automatically; a hand-written
+        # field that returns `.url` gives a path relative to whoever is serving
+        # it. The storefront is a separate origin from Django, so a relative
+        # /media/... path resolves against the Next server and 404s.
+        request = self.context.get("request")
+        url = media.image.url
+        return {
+            "url": request.build_absolute_uri(url) if request else url,
+            "alt": media.alt_text or obj.name,
+        }
 
     def get_price(self, obj):
         variant = self._cheapest(obj)

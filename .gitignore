@@ -111,3 +111,9 @@ Thumbs.db
 *.swp
 .idea/
 .vscode/
+
+# Next.js storefront
+storefront/.next/
+storefront/out/
+storefront/node_modules/
+storefront/.env*.local
