@@ -37,14 +37,6 @@ jobs:
             test -f backend/.env || (echo "Missing backend/.env" && exit 1)
             test -f frontend/.env || (echo "Missing frontend/.env" && exit 1)
 
-            if [ -z "${{ secrets.STOREFRONT_SITE_URL }}" ]; then
-              echo "Missing STOREFRONT_SITE_URL secret."
-              echo "It is baked into the storefront bundle at build time and"
-              echo "sets every canonical URL. Set it to the public origin,"
-              echo "e.g. https://paknutrition.pk"
-              exit 1
-            fi
-
             # --- Pre-deploy backup -------------------------------------------
             # `git reset --hard` below overwrites the working tree. Anything
             # tracked is replaced with the committed copy, and anything removed
@@ -83,6 +75,14 @@ jobs:
             git fetch origin main
             git reset --hard origin/main
 
+            # The .env files are not kept in the working tree — they are
+            # restored from ~/envs on every deploy. `~/envs/backend.env.backup`
+            # is the source of truth for production configuration; editing
+            # backend/.env directly is pointless because this overwrites it.
+            echo "Restoring environment files from ~/envs"
+            cp ~/envs/backend.env.backup backend/.env
+            cp ~/envs/frontend.env.backup frontend/.env
+
             echo "Setting up backend virtual environment"
             cd backend
             if [ -d ".venv" ]; then
@@ -99,16 +99,13 @@ jobs:
             pip install --upgrade pip
             pip install -r requirements.txt
 
-            echo "Validating configured database connection"
-            python manage.py shell -c "from django.conf import settings; db = settings.DATABASES['default']; print(f\"ENGINE={db.get('ENGINE')}\"); print(f\"NAME={db.get('NAME')}\"); print(f\"HOST={db.get('HOST', '')}\")"
-
-            echo "Running backend migrations"
+            echo "Running migrations"
             python manage.py migrate --noinput
 
             echo "Collecting static files"
             python manage.py collectstatic --noinput
 
-            echo "Running Django system checks"
+            echo "Running system checks"
             python manage.py check
 
             echo "Building frontend"
@@ -144,6 +141,28 @@ jobs:
               sleep 1
             done
 
+            # The storefront is opt-in, gated on its systemd unit existing.
+            #
+            # The live box runs ~10 unrelated sites on a shared Node 18, and
+            # Next.js 15 wants Node 20+. Building unconditionally would fail
+            # the deploy on a box that has not been prepared — after the
+            # migrations had already run. Install the unit (see
+            # deploy/STOREFRONT_SETUP.md) to turn this on.
+            if ! systemctl list-unit-files | grep -q "^paknutrition-storefront.service"; then
+              echo "Storefront not enabled on this host — skipping its build."
+              echo "See deploy/STOREFRONT_SETUP.md to enable it."
+              echo "Deployment completed successfully (backend + SPA)"
+              exit 0
+            fi
+
+            if [ -z "${{ secrets.STOREFRONT_SITE_URL }}" ]; then
+              echo "The storefront is enabled but STOREFRONT_SITE_URL is not set."
+              echo "It is baked into the bundle at build time and sets every"
+              echo "canonical URL, so a wrong or missing value cannot be fixed"
+              echo "by restarting. Set it to the public origin."
+              exit 1
+            fi
+
             echo "Building storefront"
             cd storefront
             if [ -f package-lock.json ]; then
@@ -178,7 +197,7 @@ jobs:
 
             sudo systemctl restart ${{ secrets.NGINX_SERVICE }}
 
-            echo "Verifying service status"
+            echo "Checking services"
             sudo systemctl is-active ${{ secrets.GUNICORN_SERVICE }}
             sudo systemctl is-active ${{ secrets.NGINX_SERVICE }}
             if systemctl list-unit-files | grep -q '^paknutrition-storefront.service'; then
