@@ -311,8 +311,8 @@ like a real one, caches, and gets indexed.
 ```bash
 docker build -t paknutrition-storefront:"$IMAGE_TAG" \
   --build-arg API_BASE_URL=http://backend:8000 \
-  --build-arg NEXT_PUBLIC_SITE_URL=https://paknutrition.pk \
-  --build-arg NEXT_PUBLIC_MEDIA_HOST=paknutrition.pk \
+  --build-arg NEXT_PUBLIC_SITE_URL=https://paknutrition.com \
+  --build-arg NEXT_PUBLIC_MEDIA_HOST=paknutrition.com \
   storefront
 ```
 
@@ -325,18 +325,18 @@ requires a rebuild, not a restart.
 ```bash
 # Real pages, not just a listening port.
 for p in / /products /categories /deals /checkout /track /sitemap.xml; do
-  printf '%-16s %s\n' "$p" "$(curl -s -o /dev/null -w '%{http_code}' "https://paknutrition.pk$p")"
+  printf '%-16s %s\n' "$p" "$(curl -s -o /dev/null -w '%{http_code}' "https://paknutrition.com$p")"
 done
 
 # A missing product must answer 404, not 200 with not-found content. A soft
 # 404 gets indexed as a real page.
-curl -s -o /dev/null -w '%{http_code}\n' https://paknutrition.pk/products/does-not-exist   # 404
+curl -s -o /dev/null -w '%{http_code}\n' https://paknutrition.com/products/does-not-exist   # 404
 
 # The staff screens must reach the SPA, not Django.
-curl -s -o /dev/null -w '%{http_code}\n' https://paknutrition.pk/admin/inventory           # 200
+curl -s -o /dev/null -w '%{http_code}\n' https://paknutrition.com/admin/inventory           # 200
 
 # Canonical tags must name the real host.
-curl -s https://paknutrition.pk/products/<a-real-slug> | grep -o '<link rel="canonical"[^>]*>'
+curl -s https://paknutrition.com/products/<a-real-slug> | grep -o '<link rel="canonical"[^>]*>'
 ```
 
 ### 7.4 Rolling the storefront back

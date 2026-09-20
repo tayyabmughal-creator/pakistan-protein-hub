@@ -12,11 +12,15 @@
 
 export const SITE = {
   name: "Pak Nutrition",
-  url: process.env.NEXT_PUBLIC_SITE_URL ?? "https://paknutrition.pk",
+  // paknutrition.com — the .pk domain does not resolve. This default only
+  // applies when NEXT_PUBLIC_SITE_URL is unset, and it is baked into the
+  // bundle at build time, so a wrong value here puts the wrong host in every
+  // canonical tag and sitemap entry.
+  url: process.env.NEXT_PUBLIC_SITE_URL ?? "https://paknutrition.com",
   description:
     "Imported sports nutrition and supplements, delivered across Pakistan. Cash on delivery available nationwide.",
   /** Shown in the footer and on the contact page. */
-  supportEmail: "support@paknutrition.pk",
+  supportEmail: "support@paknutrition.com",
   whatsapp: "",
   city: "Lahore",
   country: "PK",

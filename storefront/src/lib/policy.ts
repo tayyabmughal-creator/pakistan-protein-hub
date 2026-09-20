@@ -79,7 +79,7 @@ export const OWNER_SET: OwnerSet = {
 
   /** ⚠️  Confirm these reach a human who answers. */
   contact: {
-    email: "support@paknutrition.pk",
+    email: "support@paknutrition.com",
     /** Empty hides the WhatsApp row entirely rather than linking nowhere. */
     whatsapp: "",
     phone: "",

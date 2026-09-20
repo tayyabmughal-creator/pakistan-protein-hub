@@ -16,8 +16,8 @@ starting it, printing a note. Nothing breaks in the meantime.
 
 | Secret | Value | Why |
 |---|---|---|
-| `STOREFRONT_SITE_URL` | `https://paknutrition.pk` | Baked into the client bundle at build time. Every canonical tag, Open Graph URL and sitemap entry uses it. **A restart cannot fix a wrong value — it needs a rebuild.** The deploy refuses to run without it. |
-| `STOREFRONT_MEDIA_HOST` | `paknutrition.pk` | Allow-list for `next/image`. Unset, every product image fails in production while working locally. |
+| `STOREFRONT_SITE_URL` | `https://paknutrition.com` | Baked into the client bundle at build time. Every canonical tag, Open Graph URL and sitemap entry uses it. **A restart cannot fix a wrong value — it needs a rebuild.** The deploy refuses to run without it. |
+| `STOREFRONT_MEDIA_HOST` | `paknutrition.com` | Allow-list for `next/image`. Unset, every product image fails in production while working locally. |
 
 ## 2. Check Node
 
@@ -44,7 +44,7 @@ Django admin becomes unreachable.
 
 The backend refuses to start in production without a non-default `ADMIN_URL`,
 so a mistake here fails the deploy rather than going unnoticed. After setting
-it, Django admin moves to `https://paknutrition.pk/secure-admin/`.
+it, Django admin moves to `https://paknutrition.com/secure-admin/`.
 
 ## 4. Install the systemd unit
 
@@ -65,8 +65,8 @@ something to serve:
 ```bash
 cd storefront
 npm ci
-NEXT_PUBLIC_SITE_URL=https://paknutrition.pk \
-NEXT_PUBLIC_MEDIA_HOST=paknutrition.pk \
+NEXT_PUBLIC_SITE_URL=https://paknutrition.com \
+NEXT_PUBLIC_MEDIA_HOST=paknutrition.com \
 API_BASE_URL=http://127.0.0.1:8000 \
 npm run build
 cd ..
@@ -124,7 +124,7 @@ sudo nginx -t && sudo systemctl reload nginx
 ## 6. Verify — and what each check catches
 
 ```bash
-SITE=https://paknutrition.pk
+SITE=https://paknutrition.com
 
 # The storefront is serving the public pages.
 for p in / /products /categories /deals /checkout /track /sitemap.xml /robots.txt; do

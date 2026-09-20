@@ -53,13 +53,27 @@ jobs:
               echo "Backed up backend/db.sqlite3 to $BACKUP_DIR/db.sqlite3.$STAMP"
             fi
 
-            # shellcheck disable=SC1091
-            set -a; . backend/.env; set +a
-            if [ -n "${POSTGRES_DB:-}" ]; then
-              echo "Backing up PostgreSQL database ${POSTGRES_DB}"
-              PGPASSWORD="${POSTGRES_PASSWORD}" pg_dump \
-                -h "${POSTGRES_HOST:-localhost}" -p "${POSTGRES_PORT:-5432}" \
-                -U "${POSTGRES_USER}" -d "${POSTGRES_DB}" -Fc \
+            # Read the few values needed, rather than sourcing the file.
+            # `set -a; . backend/.env` looked tidier but executes it as shell:
+            # a Django SECRET_KEY contains characters like # ( ) $ & and the
+            # real production file aborts the deploy with a syntax error on
+            # line 2. Values are taken literally here, quotes stripped, and
+            # nothing in the file is ever executed.
+            envget() {
+              sed -n "s/^$1=//p" backend/.env | head -1 | sed -e "s/^[\"']//" -e "s/[\"']$//"
+            }
+            PG_DB="$(envget POSTGRES_DB)"
+            PG_USER="$(envget POSTGRES_USER)"
+            PG_HOST="$(envget POSTGRES_HOST)"
+            PG_PORT="$(envget POSTGRES_PORT)"
+
+            if [ -n "${PG_DB:-}" ]; then
+              echo "Backing up PostgreSQL database ${PG_DB}"
+              # Password read at the point of use and never held in a named
+              # variable, so it cannot be echoed by a later `set -x`.
+              PGPASSWORD="$(envget POSTGRES_PASSWORD)" pg_dump \
+                -h "${PG_HOST:-localhost}" -p "${PG_PORT:-5432}" \
+                -U "${PG_USER}" -d "${PG_DB}" -Fc \
                 -f "$BACKUP_DIR/paknutrition.$STAMP.dump"
               echo "Backed up to $BACKUP_DIR/paknutrition.$STAMP.dump"
             else
