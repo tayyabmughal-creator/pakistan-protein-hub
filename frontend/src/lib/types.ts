@@ -388,3 +388,228 @@ export interface DashboardSummary {
   /** Exact definition of each figure above, published by the API. */
   metric_definitions: Record<string, string>;
 }
+
+// --------------------------------------------------------------------------
+// Admin: inventory
+// --------------------------------------------------------------------------
+
+/** Capability strings. Mirrors backend/users/capabilities.py. */
+export const CAP = {
+  DASHBOARD_VIEW: "dashboard.view",
+  REPORTS_VIEW: "reports.view",
+  ORDER_VIEW: "order.view",
+  ORDER_TRANSITION: "order.transition",
+  ORDER_CANCEL: "order.cancel",
+  ORDER_REFUND: "order.refund",
+  RETURN_VIEW: "return.view",
+  RETURN_MANAGE: "return.manage",
+  PAYMENT_VIEW: "payment.view",
+  PAYMENT_REVIEW: "payment.review",
+  CATALOG_VIEW: "catalog.view",
+  CATALOG_EDIT: "catalog.edit",
+  CATALOG_PUBLISH: "catalog.publish",
+  INVENTORY_VIEW: "inventory.view",
+  INVENTORY_ADJUST: "inventory.adjust",
+  INVENTORY_RECEIVE: "inventory.receive",
+  CUSTOMER_VIEW: "customer.view",
+  CUSTOMER_EDIT: "customer.edit",
+  MARKETING_MANAGE: "marketing.manage",
+  AUDIT_VIEW: "audit.view",
+  STAFF_MANAGE: "staff.manage",
+} as const;
+
+export type Capability = (typeof CAP)[keyof typeof CAP];
+
+export interface Paginated<T> {
+  count: number;
+  next: string | null;
+  previous: string | null;
+  results: T[];
+}
+
+export interface InventoryBalance {
+  id: number;
+  variant: number;
+  sku: string;
+  product_name: string;
+  variant_description: string;
+  brand: string;
+  location: number;
+  location_code: string;
+  on_hand: number;
+  reserved: number;
+  /** on_hand - reserved. Derived server-side; never computed here. */
+  available: number;
+  low_stock_threshold: number;
+  is_low_stock: boolean;
+  is_out_of_stock: boolean;
+  last_counted_at: IsoDateTime | null;
+  /** True for every balance migrated from the old stock column. */
+  never_counted: boolean;
+  updated_at: IsoDateTime;
+}
+
+export type StockMovementType =
+  | "RECEIPT" | "SALE" | "RETURN" | "CANCELLATION"
+  | "DAMAGE" | "MANUAL_ADJUSTMENT" | "STOCKTAKE";
+
+export interface StockMovement {
+  id: number;
+  variant: number;
+  sku: string;
+  product_name: string;
+  quantity: number;
+  movement_type: StockMovementType;
+  movement_label: string;
+  reference: string;
+  order: number | null;
+  actor: number | null;
+  actor_email: string;
+  reason: string;
+  balance_after: number | null;
+  created_at: IsoDateTime;
+}
+
+// --------------------------------------------------------------------------
+// Admin: orders (v2)
+// --------------------------------------------------------------------------
+
+export type FulfilmentStatus =
+  | "PENDING_CONFIRMATION" | "CONFIRMED" | "READY_TO_PACK" | "PACKED"
+  | "READY_FOR_PICKUP" | "SHIPPED" | "DELIVERED" | "CANCELLED" | "RETURNED";
+
+export type PaymentStatusV2 =
+  | "PENDING" | "COD_PENDING" | "PAID" | "FAILED" | "REFUNDED" | "PARTIALLY_REFUNDED";
+
+export type SalesChannel = "ONLINE" | "PHONE" | "WHATSAPP" | "IN_STORE";
+
+export interface AdminOrderRow {
+  id: number;
+  customer_name: string;
+  customer_phone: string;
+  total_amount: Money;
+  refunded_amount: Money;
+  payment_method: PaymentMethod;
+  payment_status: PaymentStatusV2;
+  payment_label: string;
+  fulfilment_status: FulfilmentStatus;
+  fulfilment_label: string;
+  sales_channel: SalesChannel;
+  is_settled: boolean;
+  items_count: number;
+  courier_name: string;
+  tracking_number: string;
+  created_at: IsoDateTime;
+  confirmed_at: IsoDateTime | null;
+  shipped_at: IsoDateTime | null;
+  delivered_at: IsoDateTime | null;
+}
+
+export interface AdminOrderLine {
+  id: number;
+  product: number | null;
+  variant: number | null;
+  product_name: string;
+  sku: string;
+  variant_description: string;
+  brand_name: string;
+  quantity: number;
+  price: Money;
+  compare_at_price: Money | null;
+  line_discount: Money;
+  line_total: Money;
+}
+
+export interface AdminOrderHistoryEntry {
+  id: number;
+  kind: "PAYMENT" | "FULFILMENT" | "NOTE" | "REFUND" | "RETURN";
+  kind_label: string;
+  from_status: string;
+  to_status: string;
+  actor: number | null;
+  actor_email: string;
+  note: string;
+  is_customer_visible: boolean;
+  created_at: IsoDateTime;
+}
+
+export interface TransitionOption {
+  value: FulfilmentStatus;
+  label: string;
+}
+
+export interface AdminOrderDetail extends AdminOrderRow {
+  user: number | null;
+  guest_name: string;
+  guest_email: string;
+  guest_phone_number: string;
+  customer_email: string;
+  shipping_address: string;
+  subtotal_amount: Money;
+  discount_amount: Money;
+  shipping_fee: Money;
+  applied_promo_code: string;
+  payment_reference: string;
+  payment_tracker: string;
+  staff_note: string;
+  inventory_committed: boolean;
+  paid_at: IsoDateTime | null;
+  cancelled_at: IsoDateTime | null;
+  packed_at: IsoDateTime | null;
+  items: AdminOrderLine[];
+  history: AdminOrderHistoryEntry[];
+  /** Only moves the API will accept, so the UI cannot offer a refused button. */
+  available_transitions: TransitionOption[];
+}
+
+export interface OrderQueues {
+  awaiting_confirmation: number;
+  confirmed: number;
+  ready_to_pack: number;
+  packed: number;
+  ready_for_pickup: number;
+  shipped: number;
+  open_returns: number;
+  /** COD sold but not collected. Owed, not earned. */
+  cod_cash_outstanding: Money;
+  cod_orders_outstanding: number;
+  definitions: Record<string, string>;
+}
+
+// --------------------------------------------------------------------------
+// Admin: returns
+// --------------------------------------------------------------------------
+
+export type ReturnStatus =
+  | "REQUESTED" | "APPROVED" | "REJECTED" | "RECEIVED" | "COMPLETED" | "CANCELLED";
+
+export interface AdminReturnLine {
+  id: number;
+  order_item: number;
+  product_name: string;
+  sku: string;
+  quantity: number;
+  /** Null until someone inspects the goods. Not the same as "decided not to". */
+  restock: boolean | null;
+  restocked_at: IsoDateTime | null;
+  condition_note: string;
+}
+
+export interface AdminReturn {
+  id: number;
+  reference: string;
+  order: number;
+  customer_name: string;
+  status: ReturnStatus;
+  status_label: string;
+  reason: string;
+  reason_label: string;
+  customer_note: string;
+  staff_note: string;
+  refund_amount: Money;
+  refunded_at: IsoDateTime | null;
+  requested_at: IsoDateTime;
+  resolved_at: IsoDateTime | null;
+  is_open: boolean;
+  items: AdminReturnLine[];
+}

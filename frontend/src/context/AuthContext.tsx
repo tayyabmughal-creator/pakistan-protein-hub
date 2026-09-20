@@ -6,6 +6,11 @@ interface User {
     email: string;
     name: string;
     is_staff: boolean;
+    is_superuser?: boolean;
+    /** What this account may do. Served by /api/users/me/.
+     *  Used to hide controls, never to authorise — the API checks server-side. */
+    capabilities?: string[];
+    roles?: string[];
 }
 
 interface AuthContextType {

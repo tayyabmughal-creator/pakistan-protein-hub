@@ -21,10 +21,28 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
 User = get_user_model()
 
 class UserSerializer(serializers.ModelSerializer):
+    # What this account may do, so the admin can hide controls it would only be
+    # refused on. This is a usability signal, never the authorisation itself —
+    # every endpoint checks the capability server-side regardless of what the
+    # client was told.
+    capabilities = serializers.SerializerMethodField()
+    roles = serializers.SerializerMethodField()
+
     class Meta:
         model = User
-        fields = ('id', 'name', 'email', 'phone_number', 'is_staff', 'date_joined')
-        read_only_fields = ('email', 'is_staff', 'date_joined')
+        fields = (
+            'id', 'name', 'email', 'phone_number', 'is_staff', 'is_superuser',
+            'date_joined', 'capabilities', 'roles',
+        )
+        read_only_fields = (
+            'email', 'is_staff', 'is_superuser', 'date_joined', 'capabilities', 'roles',
+        )
+
+    def get_capabilities(self, obj):
+        return sorted(obj.get_capabilities()) if obj.is_staff or obj.is_superuser else []
+
+    def get_roles(self, obj):
+        return obj.role_names
 
 
 class AdminAddressSerializer(serializers.ModelSerializer):
