@@ -54,6 +54,9 @@ class Command(BaseCommand):
                     description="Synthetic product for the restore drill.",
                     price=Decimal("10000.00") + index,
                     stock=100,
+                    # New products default to drafts, which the storefront
+                    # hides; the CI smoke test needs something it can buy.
+                    publish_status=Product.STATUS_PUBLISHED,
                 )
                 for index in range(1, 4)
             ]

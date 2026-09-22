@@ -243,7 +243,7 @@ def main() -> int:
             )
             state["order"] = order
 
-            if order.get("payment_status") != "PENDING":
+            if order.get("payment_status") != "COD_PENDING":
                 raise SmokeFailure(
                     f"a COD order was created with payment_status={order.get('payment_status')!r}. "
                     "Cash on delivery is not paid at checkout."

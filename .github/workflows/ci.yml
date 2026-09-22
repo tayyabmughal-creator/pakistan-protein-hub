@@ -96,6 +96,7 @@ jobs:
           CSRF_TRUSTED_ORIGINS: https://shop.example.com
           FRONTEND_URL: https://shop.example.com
           BACKEND_PUBLIC_URL: https://shop.example.com
+          ADMIN_URL: ci-admin/
           SECURE_SSL_REDIRECT: "1"
           SESSION_COOKIE_SECURE: "1"
           CSRF_COOKIE_SECURE: "1"
