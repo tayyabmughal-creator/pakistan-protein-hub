@@ -141,6 +141,17 @@ jobs:
             echo "Restarting backend"
             sudo systemctl restart ${{ secrets.GUNICORN_SERVICE }}
 
+            # Celery runs the same code as the backend, so it restarts with
+            # it — otherwise tasks keep running the previous release's code
+            # until someone restarts the workers by hand. Gated on the units
+            # existing, which deploy/vps-prepare.sh installs.
+            for unit in proteinhub-worker proteinhub-beat; do
+              if systemctl list-unit-files | grep -q "^${unit}.service"; then
+                echo "Restarting ${unit}"
+                sudo systemctl restart "${unit}"
+              fi
+            done
+
             echo "Waiting for the API to become ready"
             # Straight to gunicorn, so no nginx to set X-Forwarded-Proto:
             # without it SECURE_SSL_REDIRECT answers 301 instead of the

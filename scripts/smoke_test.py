@@ -126,6 +126,11 @@ def main() -> int:
 
     def liveness():
         _, body = client.request("GET", "/healthz")
+        if not isinstance(body, dict):
+            raise SmokeFailure(
+                "/healthz did not return JSON — it is not reaching Django "
+                "(an nginx fallback serving HTML?)"
+            )
         if body.get("status") != "ok":
             raise SmokeFailure(f"unexpected body: {body}")
         return "process alive"
@@ -134,6 +139,13 @@ def main() -> int:
 
     def readiness():
         status, body = client.request("GET", "/readyz", expect=(200, 503))
+        # A 200 alone proves nothing: a proxy fallback serving HTML also
+        # answers 200. Only Django's own report counts.
+        if not isinstance(body, dict) or "checks" not in body:
+            raise SmokeFailure(
+                "/readyz did not return the readiness report — it is not reaching "
+                "Django (an nginx fallback serving HTML?)"
+            )
         if status != 200:
             broken = [n for n, c in body.get("checks", {}).items() if not c.get("ok")]
             raise SmokeFailure(f"not ready; failing checks: {', '.join(broken) or 'unknown'}")

@@ -117,3 +117,6 @@ storefront/.next/
 storefront/out/
 storefront/node_modules/
 storefront/.env*.local
+
+# Celery beat scheduler state, written at runtime on the server
+backend/celerybeat-schedule*

@@ -19,32 +19,23 @@ starting it, printing a note. Nothing breaks in the meantime.
 | `STOREFRONT_SITE_URL` | `https://paknutrition.com` | Baked into the client bundle at build time. Every canonical tag, Open Graph URL and sitemap entry uses it. **A restart cannot fix a wrong value — it needs a rebuild.** The deploy refuses to run without it. |
 | `STOREFRONT_MEDIA_HOST` | `paknutrition.com` | Allow-list for `next/image`. Unset, every product image fails in production while working locally. |
 
-## 2. Check Node
+## 2. Give the storefront its own Node
 
-The storefront needs Node 20 or newer. The SPA build already uses Node, so it
-is probably there:
+The box's system Node (`/usr/bin/node`, from apt) is 18.19.1 and is shared
+with about ten unrelated sites, so do not upgrade it. Next.js 15.5 does accept
+Node 18.18+, but 18 is end-of-life and CI builds and tests the storefront on
+Node 22 — run production on what CI tests.
 
-```bash
-node --version
-```
+Install Node 22 for the deploy user only, leaving `/usr/bin/node` alone, then
+point both the systemd unit's `ExecStart` and the deploy's storefront build at
+that binary (the unit template uses `/usr/bin/env node`, which would pick up
+the system 18).
 
-If it is older than 20, upgrade before continuing — Next.js 15 will not run on
-Node 18.
+## 3. `ADMIN_URL` — done
 
-## 3. Set `ADMIN_URL` — do this before the next deploy
-
-```bash
-grep ADMIN_URL backend/.env || echo 'ADMIN_URL=secure-admin/' >> backend/.env
-```
-
-**This matters more than it looks.** nginx routes `/admin/*` to the staff SPA
-screens and proxies Django admin at `ADMIN_URL`. If `ADMIN_URL` is still the
-default, Django admin ends up at `/admin/`, which nginx now sends to the SPA —
-Django admin becomes unreachable.
-
-The backend refuses to start in production without a non-default `ADMIN_URL`,
-so a mistake here fails the deploy rather than going unnoticed. After setting
-it, Django admin moves to `https://paknutrition.com/secure-admin/`.
+Set by `deploy/vps-prepare.sh` (2026-09-22) to a random `manage-…/` prefix,
+with a matching nginx `location`. See `ADMIN_URL` in
+`~/envs/backend.env.backup`. Nothing to do here.
 
 ## 4. Install the systemd unit
 
@@ -108,13 +99,6 @@ server {
 }
 ```
 
-Also fix the Django admin proxy in the same file, if it still says `/admin/`:
-
-```nginx
-# was: location /admin/ { proxy_pass http://127.0.0.1:8000/admin/; }
-location /secure-admin/ { proxy_pass http://127.0.0.1:8000/secure-admin/; }
-```
-
 Then:
 
 ```bash
@@ -138,8 +122,8 @@ curl -s -o /dev/null -w 'missing product: %{http_code}\n' "$SITE/products/does-n
 # The staff screens still reach the SPA, not Django.
 curl -s -o /dev/null -w 'staff admin:      %{http_code}\n' "$SITE/admin/inventory"
 
-# Django admin moved.
-curl -s -o /dev/null -w 'django admin:     %{http_code}\n' "$SITE/secure-admin/"
+# Django admin at its ADMIN_URL prefix (see ~/envs/backend.env.backup).
+curl -s -o /dev/null -w 'django admin:     %{http_code}\n' "$SITE/<ADMIN_URL>"
 
 # Account pages still reach the SPA.
 curl -s -o /dev/null -w 'login:            %{http_code}\n' "$SITE/login"
