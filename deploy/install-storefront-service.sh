@@ -53,7 +53,7 @@ step "Installing the unit"
 sed -e "s|REPLACE_WITH_DEPLOY_USER|$(whoami)|g" \
     -e "s|/REPLACE/WITH/PROJECT_PATH|${PROJECT}|g" \
     deploy/paknutrition-storefront.service | sudo tee "$UNIT" >/dev/null
-! grep -q REPLACE "$UNIT" || fail "unfilled placeholder in $UNIT"
+! grep -v '^#' "$UNIT" | grep -q REPLACE || fail "unfilled placeholder in $UNIT"
 grep -q "ExecStart=${NODE_BIN}/node " "$UNIT" || fail "unit does not use ${NODE_BIN}/node"
 sudo systemctl daemon-reload
 sudo systemctl enable --now paknutrition-storefront
@@ -74,10 +74,11 @@ verify() {
     done
     code=$(curl -s -o /dev/null -w '%{http_code}' "$B/products/does-not-exist")
     [ "$code" = 404 ] || fail "missing product answered $code, not 404"
-    img=$(curl -s "$B/products" | grep -o '/_next/image?url=[^"]*' | head -1 | sed 's/&amp;/\&/g')
+    # [^" ]: stop at the space in a srcset list, not only at the closing quote.
+    img=$(curl -s "$B/products" | grep -o '/_next/image?url=[^" ]*' | head -1 | sed 's/&amp;/\&/g' || true)
     [ -n "$img" ] || fail "no product image on /products"
     case "$img" in *127.0.0.1*) fail "image points at 127.0.0.1 — MEDIA_URL not in effect" ;; esac
-    type=$(curl -s -o /dev/null -w '%{http_code} %{content_type}' "$B$img")
+    type=$(curl -s -o /dev/null -w '%{http_code} %{content_type}' "$B$img" || true)
     case "$type" in "200 image/"*) ;; *) fail "image optimiser answered: $type" ;; esac
     echo "  pages 200, missing product 404, image $type"
 }

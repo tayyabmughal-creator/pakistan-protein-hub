@@ -130,7 +130,7 @@ Prove it renders before touching nginx:
 ```bash
 curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:3000/robots.txt   # 200
 curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:3000/products     # 200
-img=$(curl -s http://127.0.0.1:3000/products | grep -o '/_next/image?url=[^"]*' | head -1 | sed 's/&amp;/\&/g')
+img=$(curl -s http://127.0.0.1:3000/products | grep -o '/_next/image?url=[^" ]*' | head -1 | sed 's/&amp;/\&/g')
 curl -s -o /dev/null -w 'image: %{http_code} %{content_type}\n' "http://127.0.0.1:3000$img"   # 200 image/...
 ```
 
@@ -141,7 +141,18 @@ From here on, every deploy rebuilds and restarts it.
 ## 6. Point nginx at it — the cutover
 
 **Until this step the storefront runs but nobody reaches it; after it,
-customers get the new store.** Back up first:
+customers get the new store.**
+
+`deploy/nginx-enable-storefront.sh` does this section: backup, include,
+`nginx -t`, reload, then checks the public site and **rolls back
+automatically** if any check fails. Done on 2026-09-22.
+
+```bash
+scp deploy/nginx-enable-storefront.sh personalVps:/tmp/
+ssh -t personalVps 'bash /tmp/nginx-enable-storefront.sh'
+```
+
+The manual equivalent — back up first:
 
 ```bash
 SITE=/etc/nginx/sites-available/proteinhub
@@ -192,7 +203,7 @@ curl -s "$SITE/healthz"; echo
 
 # Canonical tags and images name the real host.
 curl -s "$SITE/products/<a-real-slug>" | grep -o '<link rel="canonical"[^>]*>'
-curl -s "$SITE/products" | grep -o '/_next/image?url=[^"]*' | head -1   # url=https%3A%2F%2Fpaknutrition.com...
+curl -s "$SITE/products" | grep -o '/_next/image?url=[^" ]*' | head -1   # url=https%3A%2F%2Fpaknutrition.com...
 ```
 
 Expect `200` everywhere except the missing product (`404`).

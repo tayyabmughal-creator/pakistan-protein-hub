@@ -62,6 +62,7 @@ PY
 if sudo nginx -t >/dev/null 2>&1; then
     sudo systemctl reload nginx
     echo "Added; nginx reloaded (previous config: ${SITE}.bak.${STAMP})"
+    sleep 2   # old workers answer for a moment after a reload
 else
     sudo cp "${SITE}.bak.${STAMP}" "$SITE"
     echo "nginx config test FAILED — reverted, nothing changed"
