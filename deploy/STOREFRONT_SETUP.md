@@ -84,6 +84,17 @@ ssh -t personalVps 'bash /tmp/nginx-add-health-routes.sh'
 
 ## 5. Install the systemd unit and build once
 
+`deploy/install-storefront-service.sh` does all of this section and verifies
+it — pages, images, a restart, a crash (Restart=always) and a backend restart
+— then stages the nginx snippet and runs `nginx -t` without switching traffic:
+
+```bash
+scp deploy/install-storefront-service.sh personalVps:/tmp/
+ssh -t personalVps 'bash /tmp/install-storefront-service.sh'
+```
+
+The manual equivalent:
+
 ```bash
 cd ~/pakistan-protein-hub
 
