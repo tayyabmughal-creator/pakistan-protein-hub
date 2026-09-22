@@ -1,10 +1,8 @@
 # Pak Nutrition storefront (Next.js).
 #
-# Install once, by hand, on the VPS:
-#
-#   sudo cp deploy/paknutrition-storefront.service /etc/systemd/system/
-#   sudo systemctl daemon-reload
-#   sudo systemctl enable --now paknutrition-storefront
+# Install once, by hand, on the VPS — see deploy/STOREFRONT_SETUP.md, which
+# fills in the REPLACE_* placeholders before copying this into
+# /etc/systemd/system/. Do not copy it unedited.
 #
 # Until this unit exists the deploy workflow skips restarting it, so adding
 # the storefront to the repository does not break deploys for a box that has
@@ -16,7 +14,7 @@ After=network.target
 # The storefront renders by calling the API. Starting before gunicorn is up
 # just means the first few requests fail; Wants (not Requires) so a backend
 # restart does not take the storefront down with it.
-Wants=gunicorn.service
+Wants=proteinhub-backend.service
 
 [Service]
 Type=simple
@@ -35,16 +33,24 @@ Environment=HOSTNAME=127.0.0.1
 # is the only thing that should be able to reach either process directly.
 Environment=API_BASE_URL=http://127.0.0.1:8000
 
-# `npm run start` would add a node process whose only job is to spawn another
-# one, so a restart has to kill two. Call next directly.
-ExecStart=/usr/bin/env node node_modules/.bin/next start -p 3000 -H 127.0.0.1
+# The deploy user's own Node 22 (deploy/install-storefront-node.sh), never the
+# shared system Node 18 that `/usr/bin/env node` would find. The deploy
+# workflow builds with the same binary, so build and runtime always match.
+Environment=PATH=/home/REPLACE_WITH_DEPLOY_USER/.local/node22/bin:/usr/bin:/bin
+
+# next.config sets output: "standalone" (the Docker image needs it), and
+# `next start` does not support that mode. Run the standalone server, as the
+# Dockerfile does; `npm run assemble:standalone` copies .next/static and
+# public into it after each build. PORT and HOSTNAME above bind it.
+ExecStart=/home/REPLACE_WITH_DEPLOY_USER/.local/node22/bin/node .next/standalone/server.js
 
 Restart=always
 RestartSec=5
 
 # A Next.js process that has wedged still holds its port, so systemd cannot
-# tell it apart from a healthy one. The watchdog below is the cheap version:
-# restart on exit, and rely on nginx failing over to the SPA if it is hard down.
+# tell it apart from a healthy one. The cheap version: restart on exit, and
+# nginx serves the SPA for storefront pages while it is down (error_page in
+# deploy/nginx-storefront.conf).
 KillSignal=SIGTERM
 TimeoutStopSec=20
 

@@ -5,6 +5,13 @@ on:
     branches:
       - main
 
+# One deploy at a time. Two overlapping runs would reset the checkout, migrate
+# and build on the VPS concurrently. Queued, never cancelled: killing a deploy
+# mid-migration is worse than waiting for it.
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
 jobs:
   # Nothing reaches the VPS unless every gate passes. This used to deploy
   # straight from a push with no tests, no lint, no typecheck and no secret scan.
@@ -171,9 +178,9 @@ jobs:
 
             # The storefront is opt-in, gated on its systemd unit existing.
             #
-            # The live box runs ~10 unrelated sites on a shared Node 18, and
-            # Next.js 15 wants Node 20+. Building unconditionally would fail
-            # the deploy on a box that has not been prepared — after the
+            # The live box's system Node is a shared 18; the storefront needs
+            # the deploy user's own Node 22. Building unconditionally would
+            # fail the deploy on a box that has not been prepared — after the
             # migrations had already run. Install the unit (see
             # deploy/STOREFRONT_SETUP.md) to turn this on.
             if ! systemctl list-unit-files | grep -q "^paknutrition-storefront.service"; then
@@ -191,7 +198,17 @@ jobs:
               exit 1
             fi
 
-            echo "Building storefront"
+            # The same Node 22 the systemd unit runs, installed for this user by
+            # deploy/install-storefront-node.sh. The system Node on this box is
+            # 18 and shared with other sites, so it is never used here.
+            STOREFRONT_NODE_BIN="$HOME/.local/node22/bin"
+            if [ ! -x "$STOREFRONT_NODE_BIN/node" ]; then
+              echo "ERROR: $STOREFRONT_NODE_BIN/node not found."
+              echo "Run deploy/install-storefront-node.sh on the VPS first."
+              exit 1
+            fi
+            export PATH="$STOREFRONT_NODE_BIN:$PATH"
+            echo "Building storefront with node $(node --version)"
             cd storefront
             if [ -f package-lock.json ]; then
               npm ci
@@ -208,6 +225,9 @@ jobs:
             # and would be cached and indexed as such.
             export API_BASE_URL="http://127.0.0.1:8000"
             npm run build
+            # The unit runs .next/standalone/server.js, which serves static
+            # assets only from inside the standalone directory.
+            npm run assemble:standalone
 
             cd ..
 

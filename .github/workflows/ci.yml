@@ -3,14 +3,20 @@ name: CI
 # Every deployment candidate runs these. The deploy workflow waits on this one,
 # so a failing gate means nothing reaches the VPS.
 
+#
+# No `push: main` trigger: the deploy workflow already runs this on every push
+# to main. Having both put two runs in the same concurrency group, and
+# cancel-in-progress killed whichever started first — the standalone run
+# every time so far, but on the other ordering the deploy's own gate, failing
+# the deploy.
 on:
-  push:
-    branches: [main]
   pull_request:
   workflow_call:
 
 concurrency:
-  group: ci-${{ github.ref }}
+  # github.workflow is the caller's name under workflow_call, so a deploy's
+  # gate and a PR run never share a group.
+  group: ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -270,15 +276,20 @@ jobs:
         working-directory: storefront
         env:
           API_BASE_URL: http://127.0.0.1:8000
-          NEXT_PUBLIC_SITE_URL: https://paknutrition.pk
-        run: npm run build
+          NEXT_PUBLIC_SITE_URL: https://paknutrition.com
+        run: |
+          npm run build
+          npm run assemble:standalone
 
       - name: Serve the built storefront and check it renders
         working-directory: storefront
         env:
           API_BASE_URL: http://127.0.0.1:8000
+          PORT: "3000"
+          HOSTNAME: 127.0.0.1
+        # The standalone server, as production's systemd unit runs it.
         run: |
-          npx next start -p 3000 > "$RUNNER_TEMP/storefront.log" 2>&1 &
+          node .next/standalone/server.js > "$RUNNER_TEMP/storefront.log" 2>&1 &
           for attempt in $(seq 1 30); do
             if curl -fsS http://127.0.0.1:3000/robots.txt >/dev/null 2>&1; then
               break
