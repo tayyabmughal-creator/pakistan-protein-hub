@@ -303,3 +303,59 @@ class BackupCommandTests(TestCase):
         with override_settings(DATABASES={"default": {"ENGINE": "django.db.backends.oracle"}}):
             with self.assertRaises(CommandError):
                 call_command("backup_database", verbosity=0)
+
+
+class InternalThrottleExemptionTests(TestCase):
+    """The storefront's own server-side calls must not share one anonymous budget."""
+
+    def _get(self, **meta):
+        return self.client.get("/api/products/", **meta)
+
+    @override_settings(
+        # Throttle history lives in the cache; the test settings' DummyCache
+        # would forget every request.
+        CACHES={"default": {"BACKEND": "django.core.cache.backends.locmem.LocMemCache"}},
+        REST_FRAMEWORK={
+            "DEFAULT_THROTTLE_CLASSES": ["common.throttling.AnonRateThrottle"],
+            "DEFAULT_THROTTLE_RATES": {"anon": "2/day", "user": "1000/day"},
+            "NUM_PROXIES": 1,
+        }
+    )
+    def test_throttles(self):
+        from rest_framework.settings import api_settings
+        from rest_framework.throttling import SimpleRateThrottle
+
+        from django.core.cache import cache
+
+        cache.clear()
+        original_rates = SimpleRateThrottle.THROTTLE_RATES
+        api_settings.reload()
+        SimpleRateThrottle.THROTTLE_RATES = api_settings.DEFAULT_THROTTLE_RATES
+
+        def restore():
+            SimpleRateThrottle.THROTTLE_RATES = original_rates
+            api_settings.reload()
+
+        self.addCleanup(restore)
+
+        with self.subTest("loopback without X-Forwarded-For is never throttled"):
+            statuses = {self._get(REMOTE_ADDR="127.0.0.1").status_code for _ in range(5)}
+            self.assertEqual(statuses, {200})
+
+        with self.subTest("a visitor through nginx is throttled on their own address"):
+            visitor = {"REMOTE_ADDR": "127.0.0.1", "HTTP_X_FORWARDED_FOR": "203.0.113.7"}
+            self.assertEqual(self._get(**visitor).status_code, 200)
+            self.assertEqual(self._get(**visitor).status_code, 200)
+            self.assertEqual(self._get(**visitor).status_code, 429)
+            other = {"REMOTE_ADDR": "127.0.0.1", "HTTP_X_FORWARDED_FOR": "198.51.100.9"}
+            self.assertEqual(self._get(**other).status_code, 200)
+
+        with self.subTest("a forged X-Forwarded-For prefix does not reset the budget"):
+            forged = {"REMOTE_ADDR": "127.0.0.1", "HTTP_X_FORWARDED_FOR": "10.9.9.9, 203.0.113.7"}
+            self.assertEqual(self._get(**forged).status_code, 429)
+
+        with self.subTest("a non-loopback caller is not treated as internal"):
+            outside = {"REMOTE_ADDR": "192.0.2.50"}
+            self.assertEqual(self._get(**outside).status_code, 200)
+            self.assertEqual(self._get(**outside).status_code, 200)
+            self.assertEqual(self._get(**outside).status_code, 429)

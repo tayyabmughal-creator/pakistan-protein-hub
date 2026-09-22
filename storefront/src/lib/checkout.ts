@@ -17,7 +17,7 @@
 
 import { z } from "zod";
 
-import { API_BASE, INTERNAL_HEADERS } from "./internal-api";
+import { API_BASE, customerHeaders } from "./internal-api";
 
 export interface QuoteLine {
   variantId: number;
@@ -74,7 +74,7 @@ export async function getQuote(
   try {
     response = await fetch(`${API_BASE}/api/orders/quote/`, {
       method: "POST",
-      headers: { ...INTERNAL_HEADERS, "Content-Type": "application/json" },
+      headers: { ...(await customerHeaders()), "Content-Type": "application/json" },
       body: JSON.stringify({ items: toItems(lines), promo_code: promoCode }),
       cache: "no-store", // a total must never be served from a cache
     });
@@ -147,7 +147,7 @@ export async function placeOrder(
   try {
     response = await fetch(`${API_BASE}/api/orders/`, {
       method: "POST",
-      headers: { ...INTERNAL_HEADERS, "Content-Type": "application/json" },
+      headers: { ...(await customerHeaders()), "Content-Type": "application/json" },
       body: JSON.stringify({
         ...address,
         // Cash on delivery only for now. Safepay stays disabled until its

@@ -244,9 +244,14 @@ REST_FRAMEWORK = {
         'rest_framework_simplejwt.authentication.JWTAuthentication',
     ),
     'DEFAULT_THROTTLE_CLASSES': [
-        'rest_framework.throttling.AnonRateThrottle',
+        # Exempts the storefront's own server-side calls; see common/throttling.py.
+        'common.throttling.AnonRateThrottle',
         'rest_framework.throttling.UserRateThrottle'
     ],
+    # nginx is the only proxy. Without this DRF keys throttles on the whole
+    # X-Forwarded-For header, which the client controls every entry of but the
+    # last — so a fresh fake prefix per request would bypass per-IP limits.
+    'NUM_PROXIES': 1,
     'DEFAULT_THROTTLE_RATES': {
         'anon': '100/day',
         'user': '1000/day',
