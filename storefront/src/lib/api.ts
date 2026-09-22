@@ -35,7 +35,7 @@ import type {
   Sitemap,
 } from "./types";
 
-const API_BASE = process.env.API_BASE_URL ?? "http://127.0.0.1:8000";
+import { API_BASE, INTERNAL_HEADERS } from "./internal-api";
 
 /** Catalogue content changes when staff edit it, which is rarely. */
 const CONTENT_TTL = 300;
@@ -73,7 +73,7 @@ async function get<T>(path: string, options: FetchOptions = {}): Promise<T> {
   let response: Response;
   try {
     response = await fetch(url, {
-      headers: { Accept: "application/json" },
+      headers: { ...INTERNAL_HEADERS, Accept: "application/json" },
       next: {
         revalidate: options.revalidate ?? CONTENT_TTL,
         tags: options.tags,

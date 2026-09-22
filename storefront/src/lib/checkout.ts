@@ -17,7 +17,7 @@
 
 import { z } from "zod";
 
-const API_BASE = process.env.API_BASE_URL ?? "http://127.0.0.1:8000";
+import { API_BASE, INTERNAL_HEADERS } from "./internal-api";
 
 export interface QuoteLine {
   variantId: number;
@@ -74,7 +74,7 @@ export async function getQuote(
   try {
     response = await fetch(`${API_BASE}/api/orders/quote/`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { ...INTERNAL_HEADERS, "Content-Type": "application/json" },
       body: JSON.stringify({ items: toItems(lines), promo_code: promoCode }),
       cache: "no-store", // a total must never be served from a cache
     });
@@ -147,7 +147,7 @@ export async function placeOrder(
   try {
     response = await fetch(`${API_BASE}/api/orders/`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { ...INTERNAL_HEADERS, "Content-Type": "application/json" },
       body: JSON.stringify({
         ...address,
         // Cash on delivery only for now. Safepay stays disabled until its

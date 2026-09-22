@@ -12,7 +12,7 @@
  * oracle for "does order 812 exist" and "was it placed with this email".
  */
 
-const API_BASE = process.env.API_BASE_URL ?? "http://127.0.0.1:8000";
+import { API_BASE, INTERNAL_HEADERS } from "./internal-api";
 
 export interface TrackedOrder {
   id: number;
@@ -53,7 +53,7 @@ export async function trackOrder(
   try {
     response = await fetch(`${API_BASE}/api/orders/guest-lookup/`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { ...INTERNAL_HEADERS, "Content-Type": "application/json" },
       body: JSON.stringify(body),
       cache: "no-store",
     });

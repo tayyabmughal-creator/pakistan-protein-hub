@@ -110,7 +110,7 @@ shell on an already-broken box, not for normal operation.
 | `POSTGRES_DB` / `POSTGRES_USER` / `POSTGRES_PASSWORD` | also needed in the shell running compose, for the `db` service |
 | `REDIS_URL` | set by compose to `redis://redis:6379/0` |
 | `CELERY_BROKER_URL` | set by compose to `redis://redis:6379/1` |
-| `ALLOWED_HOSTS`, `CORS_ALLOWED_ORIGINS`, `CSRF_TRUSTED_ORIGINS` | real hostnames |
+| `ALLOWED_HOSTS`, `CORS_ALLOWED_ORIGINS`, `CSRF_TRUSTED_ORIGINS` | real hostnames. On the VPS, `ALLOWED_HOSTS` also needs `127.0.0.1`: the deploy's readiness probe and the storefront call gunicorn directly on loopback |
 | `FRONTEND_URL`, `BACKEND_PUBLIC_URL` | `https://…` |
 | `IMAGE_TAG` | the artefact being deployed |
 

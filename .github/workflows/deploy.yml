@@ -142,8 +142,11 @@ jobs:
             sudo systemctl restart ${{ secrets.GUNICORN_SERVICE }}
 
             echo "Waiting for the API to become ready"
+            # Straight to gunicorn, so no nginx to set X-Forwarded-Proto:
+            # without it SECURE_SSL_REDIRECT answers 301 instead of the
+            # readiness result. 127.0.0.1 must be in ALLOWED_HOSTS.
             for attempt in $(seq 1 30); do
-              if curl -fsS http://127.0.0.1:8000/readyz >/dev/null 2>&1; then
+              if curl -fsS -H "X-Forwarded-Proto: https" http://127.0.0.1:8000/readyz >/dev/null 2>&1; then
                 echo "API ready after ${attempt}s"
                 break
               fi
