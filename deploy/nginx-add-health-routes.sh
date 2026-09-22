@@ -4,7 +4,11 @@
 #
 # Run ON THE VPS as `tayyab`; it asks for the sudo password once:
 #
-#     ssh -t personalVps 'bash -s' < deploy/nginx-add-health-routes.sh
+#     scp deploy/nginx-add-health-routes.sh personalVps:/tmp/
+#     ssh -t personalVps 'bash /tmp/nginx-add-health-routes.sh; rm -f /tmp/nginx-add-health-routes.sh'
+#
+# (Not `bash -s < script`: that uses stdin for the script, leaving no
+# terminal for the sudo password prompt.)
 #
 # Without this, both paths fall through to `location / { try_files ... }` and
 # answer 200 with the admin SPA's index.html, so external uptime monitoring
